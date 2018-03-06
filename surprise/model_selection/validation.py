@@ -90,7 +90,7 @@ def cross_validate(algo, data, measures=['rmse', 'mae'], cv=None,
               each split.
 
     '''
-    print('MY CV')
+    print('MY CV.......')
     measures = [m.lower() for m in measures]
 
     cv = get_cv(cv)
@@ -108,7 +108,17 @@ def cross_validate(algo, data, measures=['rmse', 'mae'], cv=None,
     test_measures = dict()
     train_measures = dict()
     ret = dict()
+
+
+    measures_for_ret = []
     for m in measures:
+        if 'precision' in m:
+            measures_for_ret += m.split('_')
+        else:
+            measures_for_ret.append(m)
+    assert('precisionat10_recallat10' not in measures_for_ret)
+
+    for m in measures_for_ret:
         # transform list of dicts into dict of lists
         # Same as in GridSearchCV.fit()
         test_measures[m] = np.asarray([d[m] for d in test_measures_dicts])
@@ -174,7 +184,14 @@ def fit_and_score(algo, trainset, testset, measures,
     train_measures = dict()
     for m in measures:
         f = getattr(accuracy, m.lower())
-        test_measures[m] = f(predictions, verbose=0)
+        result = f(predictions, verbose=0)
+        if isinstance(result, tuple):
+            sub_measures = m.split('_')
+            for i_sm, sub_measure in enumerate(sub_measures):
+                test_measures[sub_measure] = result[i_sm]
+        else:
+            test_measures[m] = result
+        # TODO: support return train measures (Copy or abstract the above code...)
         if return_train_measures:
             train_measures[m] = f(train_predictions, verbose=0)
 
