@@ -90,7 +90,6 @@ def cross_validate(algo, data, measures=['rmse', 'mae'], cv=None,
               each split.
 
     '''
-    print('MY CV.......')
     measures = [m.lower() for m in measures]
 
     cv = get_cv(cv)

@@ -48,6 +48,14 @@ BUILTIN_DATASETS = {
                                rating_scale=(1, 5),
                                sep='::')
         ),
+    'ml-20m':
+        BuiltinDataset(
+            url='http://files.grouplens.org/datasets/movielens/ml-20m.zip',
+            path=join(get_dataset_dir(), 'ml-20m/ml-20m/ratings.csv'),
+            reader_params=dict(line_format='user item rating timestamp',
+                               rating_scale=(1, 5),
+                               sep=',')
+        ),
     'jester':
         BuiltinDataset(
             url='http://eigentaste.berkeley.edu/dataset/jester_dataset_2.zip',
