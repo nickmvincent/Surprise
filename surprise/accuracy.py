@@ -143,8 +143,34 @@ def fcp(predictions, verbose=True):
     return fcp
 
 
-def precision10t4_recall10t4(predictions, verbose=True):
-    '''Return precision and recall at k metrics for each user.'''
+def dcg_at_k(ratings):
+    """
+    Discounted cumulative gain at k
+    https://en.wikipedia.org/wiki/Discounted_cumulative_gain
+    Using formula from this MSR IR paper:
+    https://dl.acm.org/citation.cfm?doid=1102351.1102363
+
+    k is assumed to be the length of the input list
+    args:
+        ratings: a list of numerical ratings (e.g. 1-5)
+    returns:
+        a dcg_at_k value
+    """
+    k = len(ratings)
+
+    return sum([
+        (2 ** rating - 1) / 
+        (np.math.log(i + 1, 2))
+        for rating, i in zip(ratings, range(1, k+1))
+    ])
+
+
+def precision10t4_recall10t4_ndcg10(predictions, verbose=True):
+    """
+    Return precision and recall at k metrics for each user.
+    Also returns dcg_at_k.
+    https://en.wikipedia.org/wiki/Discounted_cumulative_gain
+    """
     k = 10
     threshold = 4
     # First map the predictions to each user.
@@ -152,22 +178,33 @@ def precision10t4_recall10t4(predictions, verbose=True):
     for uid, _, true_r, est, _ in predictions:
         user_est_true[uid].append((est, true_r))
 
-    precisions = dict()
-    recalls = dict()
+    precisions, recalls, ndcgs = {}, {}, {}
     for uid, user_ratings in user_est_true.items():
+
 
         # Sort user ratings by estimated value
         user_ratings.sort(key=lambda x: x[0], reverse=True)
+        # also need to sort by true value for Ideal DCG
+        user_ratings_sorted_by_trueval = sorted(user_ratings, key=lambda x: x[1], reverse=True)
+        
+        top_k = user_ratings[:k]
+
+        first_k_true_vals = [x[1] for x in user_ratings_sorted_by_trueval[:k]]
+        first_k_pred_vals = [x[0] for x in top_k]
+        ideal_dcg = dcg_at_k(first_k_true_vals)
+        pred_dcg = dcg_at_k(first_k_pred_vals)
+        norm_dcg = pred_dcg / ideal_dcg if ideal_dcg else 0
+        ndcgs[uid] = norm_dcg
 
         # Number of relevant items
         n_rel = sum((true_r >= threshold) for (_, true_r) in user_ratings)
 
         # Number of recommended items in top k
-        n_rec_k = sum((est >= threshold) for (est, _) in user_ratings[:k])
+        n_rec_k = sum((est >= threshold) for (est, _) in top_k)
 
         # Number of relevant and recommended items in top k
         n_rel_and_rec_k = sum(((true_r >= threshold) and (est >= threshold))
-                              for (est, true_r) in user_ratings[:k])
+                              for (est, true_r) in top_k)
 
         # Precision@K: Proportion of recommended items that are relevant
         precisions[uid] = n_rel_and_rec_k / n_rec_k if n_rec_k != 0 else 1
@@ -175,4 +212,5 @@ def precision10t4_recall10t4(predictions, verbose=True):
         # Recall@K: Proportion of relevant items that are recommended
         recalls[uid] = n_rel_and_rec_k / n_rel if n_rel != 0 else 1
 
-    return np.mean(list(precisions.values())), np.mean(list(recalls.values()))
+    return np.mean(list(precisions.values())), np.mean(list(recalls.values())), np.mean(list(ndcgs.values()))
+

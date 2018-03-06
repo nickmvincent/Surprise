@@ -67,3 +67,11 @@ def test_fcp():
 
     with pytest.raises(ValueError):
         fcp([])
+
+
+def test_at_k():
+    """
+    Tests for the @k metrics: precision, recall, and nDCG
+    TODO
+    """
+    return
