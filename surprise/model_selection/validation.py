@@ -102,7 +102,8 @@ def cross_validate(algo, data, measures=['rmse', 'mae'], cv=None,
     (test_measures_dicts,
      train_measures_dicts,
      fit_times,
-     test_times) = zip(*out)
+     test_times,
+     num_tested) = zip(*out)
 
     test_measures = dict()
     train_measures = dict()
@@ -129,6 +130,7 @@ def cross_validate(algo, data, measures=['rmse', 'mae'], cv=None,
 
     ret['fit_time'] = fit_times
     ret['test_time'] = test_times
+    ret['num_tested'] = [num_tested for _ in fit_times]
 
     if verbose:
         print_summary(algo, measures, test_measures, train_measures, fit_times,
@@ -194,7 +196,7 @@ def fit_and_score(algo, trainset, testset, measures,
         if return_train_measures:
             train_measures[m] = f(train_predictions, verbose=0)
 
-    return test_measures, train_measures, fit_time, test_time
+    return test_measures, train_measures, fit_time, test_time, len(testset)
 
 
 def print_summary(algo, measures, test_measures, train_measures, fit_times,
