@@ -119,6 +119,120 @@ class KFold():
 
             yield trainset, testset
 
+
+    def custom_user_split(self, data, all_user_ids, out_user_ids):
+        '''Generator function to iterate over trainsets and testsets.
+
+        Args:
+            data(:obj:`Dataset<surprise.dataset.Dataset>`): The data containing
+                ratings that will be devided into trainsets and testsets.
+
+        Yields:
+            tuple of (trainset, testset)
+        '''
+
+        if self.n_splits > len(data.raw_ratings) or self.n_splits < 2:
+            raise ValueError('Incorrect value for n_splits={0}. '
+                             'Must be >=2 and less than the number '
+                             'of ratings'.format(len(data.raw_ratings)))
+
+        # We use indices to avoid shuffling the original data.raw_ratings list.
+        user_id_indices = np.arange(len(all_user_ids))
+
+        if self.shuffle:
+            get_rng(self.random_state).shuffle(user_id_indices)
+
+        start, stop = 0, 0
+        for fold_i in range(self.n_splits):
+            start = stop
+            stop += len(user_id_indices) // self.n_splits
+            if fold_i < len(user_id_indices) % self.n_splits:
+                stop += 1
+
+            uids_for_raw_trainset = [all_user_ids[i] for i in chain(user_id_indices[:start],
+                                                               user_id_indices[stop:])]
+            # kick out the "out group" (boycotting users)
+            uids_for_raw_trainset = [
+                x for x in uids_for_raw_trainset if x not in out_user_ids
+            ]
+            uids_for_raw_testset = [all_user_ids[i] for i in user_id_indices[start:stop]]
+            uids_for_in_testset = [
+                x for x in uids_for_raw_testset if x not in out_user_ids
+            ]
+            print((len(uids_for_raw_trainset), len(all_user_ids), len(out_user_ids)))
+            raw_trainset, raw_testset, in_testset, out_testset = [], [], [], []
+
+            for raw_rating_row in data.raw_ratings:
+                uid = raw_rating_row[0]
+                if uid in uids_for_raw_trainset:
+                    raw_trainset.append(raw_rating_row)
+                else:
+                    raw_testset.append(raw_rating_row)
+                    if uid in uids_for_in_testset:
+                        in_testset.append(raw_rating_row)
+                    else:
+                        out_testset.append(raw_rating_row)
+
+            trainset = data.construct_trainset(raw_trainset)
+            testset = data.construct_testset(raw_testset)
+            in_testset = data.construct_testset(in_testset)
+            out_testset = data.construct_testset(out_testset)
+
+            yield trainset, testset, in_testset, out_testset
+
+    def custom_split(self, data, out_ids):
+        '''custom generator function to iterate over trainsets and testsets.
+        this generator is special, because it will also include some data
+        from the "boycotters"
+
+        # TODO: must write tests for this.
+        Args:
+            data(:obj:`Dataset<surprise.dataset.Dataset>`): The data containing
+                ratings that will be devided into trainsets and testsets.
+
+        Yields:
+            tuple of (trainset, testset, intestset, outtestset)
+        '''
+
+        if self.n_splits > len(data.raw_ratings) or self.n_splits < 2:
+            raise ValueError('Incorrect value for n_splits={0}. '
+                             'Must be >=2 and less than the number '
+                             'of ratings'.format(len(data.raw_ratings)))
+
+        # We use indices to avoid shuffling the original data.raw_ratings list.
+        indices = np.arange(len(data.raw_ratings))
+
+        if self.shuffle:
+            get_rng(self.random_state).shuffle(indices)
+
+        start, stop = 0, 0
+        for fold_i in range(self.n_splits):
+            start = stop
+            stop += len(indices) // self.n_splits
+            if fold_i < len(indices) % self.n_splits:
+                stop += 1
+
+            raw_trainset = [data.raw_ratings[i] for i in chain(indices[:start],
+                                                               indices[stop:])]
+            raw_testset = [data.raw_ratings[i] for i in indices[start:stop]]
+            raw_intestset = []
+            raw_outtestset = []
+            for raw_rating_tuple in raw_testset:
+                print(raw_rating_tuple)
+                print(out_ids)
+                if raw_rating_tuple[0] in out_ids:
+                    raw_outtestset.append(raw_rating_tuple)
+                else:
+                    raw_intestset.append(raw_rating_tuple)
+
+
+            trainset = data.construct_trainset(raw_trainset)
+            testset = data.construct_testset(raw_testset)
+            intestset = data.construct_testset(raw_intestset)
+            outtestset = data.construct_testset(raw_outtestset)
+
+            yield trainset, testset, intestset, outtestset
+
     def get_n_folds(self):
 
         return self.n_splits
