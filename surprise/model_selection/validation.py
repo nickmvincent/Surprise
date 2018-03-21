@@ -4,6 +4,7 @@ the mighty scikit learn.'''
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 import time
+from collections import defaultdict
 
 import numpy as np
 from joblib import Parallel
@@ -103,14 +104,13 @@ def cross_validate(algo, data, measures=['rmse', 'mae'], cv=None,
      train_measures_dicts,
      fit_times,
      test_times,
-     num_tested) = zip(*out)
+     num_tested, crossfold_indices) = zip(*out)
 
     test_measures = dict()
     train_measures = dict()
     ret = dict()
 
     for m in test_measures_dicts[0]:
-        print(m)
         # transform list of dicts into dict of lists
         # Same as in GridSearchCV.fit()
         test_measures[m] = np.asarray([d[m] for d in test_measures_dicts])
@@ -132,28 +132,66 @@ def cross_validate(algo, data, measures=['rmse', 'mae'], cv=None,
 
 
 
-def merge_fit_and_score(fit_and_score_outputs):
+def merge_fit_and_score(fit_and_score_outputs, cv=5):
     """
     Takes in a list of results.
     Each item in the list of results (fit_and_score_outputs) has a 
     test_measure_dict, train_measure_dict, fit_time, test_times, num_tested
 
     Specifically for use with cross_validate_users. Re-use with care
-    """
-    merged_test = {}
-    merged_train = {}
-    concatenated_fit_times = []
-    concatenated_test_times = []
-    concatenated_num_tested = []
 
-    for output in fit_and_score_outputs:
-        merged_test.update(output[0])
-        if output[1]:
-            merged_train = merged_train.update(output[1])
-        concatenated_fit_times.append(output[2])
-        concatenated_test_times.append(output[3])
-        concatenated_num_tested.append(output[4])
-    return merged_test, merged_train, concatenated_fit_times, concatenated_test_times, concatenated_num_tested
+
+    merged test should look like this
+    {
+        test_rmse_in-group: [1, 0.8, 0.9, 1, 1.1],
+        test_rmse_out-group: [...],
+        ...
+        test_ndcg10_all: [...],
+    }
+
+    merged_fit_times should look like this:
+    {
+        test_in-group: [1, 0.5, 1, 2, 3],
+        test_out-group: [...],
+        ...
+    }
+    """
+    merged_test = defaultdict(dict)
+    merged_train = defaultdict(dict)
+    fit_times = defaultdict(dict)
+    test_times = defaultdict(dict)
+    num_tested = defaultdict(dict)
+
+    # indices = {
+    #     'test': 0, # this is where test stuff lives in the return tuple
+    #     'train': 1,
+    #     'fit_times': 2,
+    #     'test_times': 3,
+    #     'num_tested': 4,
+    #     'cv_index': 5
+    # }
+
+    for output in fit_and_score_outputs: # we don't know what order these are in
+        test_metrics, _, fit_time, test_time, num, cv_index = output
+        cv_index = int(cv_index)
+        for key, val in test_metrics.items():
+            merged_test[key][cv_index] = val
+            fit_times[key][cv_index] = fit_time
+            test_times[key][cv_index] = test_time
+            num_tested[key][cv_index] = num
+
+
+    for merged_dict in (
+        merged_test, merged_train,
+        fit_times, test_times, num_tested    
+    ):
+        for metric_name, dict_with_int_keys in merged_dict.items():
+            as_list = []
+            for i in range(len(dict_with_int_keys.keys())):
+                as_list.append(dict_with_int_keys[i])
+            merged_dict[metric_name] = as_list
+
+    return merged_test, merged_train, fit_times, test_times, num_tested
 
 def cross_validate_users(algo, data, all_uids, out_uids, measures=None, cv=5,
                    return_train_measures=False, n_jobs=-1,
@@ -235,53 +273,78 @@ def cross_validate_users(algo, data, all_uids, out_uids, measures=None, cv=5,
 
     cv = get_cv(cv)
 
-    delayed_list = []
-    for (trainset, testset, in_testset, out_testset) in cv.custom_user_split(data, all_uids, out_uids):
-        delayed_list += [
-            delayed(merge_fit_and_score)(fit_and_score(
+
+    # delayed_list = []
+    # for (trainset, testset, in_testset, out_testset) in cv.custom_user_split(data, all_uids, out_uids):
+    #     delayed_list += [
+    #         delayed(merge_fit_and_score)(fit_and_score(
+    #             algo, trainset, some_testset, measures,
+    #             return_train_measures, testset_name
+    #         ) for (some_testset, testset_name) in [
+    #             (testset, 'all'),
+    #             (in_testset, 'in-group'),
+    #             (out_testset, 'out-group'),
+    #         ])
+    #     ]
+    args_list = []
+    for crossfold_index, (trainset, testset, in_testset, out_testset) in enumerate(cv.custom_user_split(data, all_uids, out_uids)):
+        args_list += [[
                 algo, trainset, some_testset, measures,
-                return_train_measures, testset_name
-            ) for (some_testset, testset_name) in (
+                return_train_measures, testset_name, crossfold_index
+            ] for (some_testset, testset_name) in (
                 (testset, 'all'),
                 (in_testset, 'in-group'),
                 (out_testset, 'out-group'),
-            ))
-        ]
-    out = Parallel(n_jobs=n_jobs, pre_dispatch=pre_dispatch)(tuple(delayed_list))
+        )]
+    delayed_list = (
+        delayed(fit_and_score)(
+            algo, trainset, some_testset, measures, return_train_measures, testset_name, crossfold_index
+        ) for algo, trainset, some_testset, measures, return_train_measures, testset_name, crossfold_index in args_list
+    )
+    out = Parallel(n_jobs=n_jobs, pre_dispatch=pre_dispatch)(delayed_list)
 
-    (test_measures_dicts,
-     train_measures_dicts,
+    out = merge_fit_and_score(out)
+    (test_measures,
+     train_measures,
      fit_times,
      test_times,
-     num_tested) = zip(*out)
+     num_tested) = out
 
-    test_measures = dict()
-    train_measures = dict()
-    ret = dict()
 
-    for m in test_measures_dicts[0]:
-        # transform list of dicts into dict of lists
-        # Same as in GridSearchCV.fit()
-        test_measures[m] = np.asarray([d[m] for d in test_measures_dicts])
-        ret['test_' + m] = test_measures[m]
-        if return_train_measures:
-            train_measures[m] = np.asarray([d[m] for d in
-                                            train_measures_dicts])
-            ret['train_' + m] = test_measures[m]
+    ret = {}
+    for key, val in test_measures.items():
+        ret['test_' + key] = val
+    for key, val in train_measures.items():
+        ret['train_' + key] = val
+    for key, val in fit_times.items():
+        ret['fit_times_' + key] = val
+    for key, val in test_times.items():
+        ret['test_times_' + key] = val
+    for key, val in num_tested.items():
+        ret['num_tested_' + key] = val
 
-    ret['fit_time'] = fit_times
-    ret['test_time'] = test_times
-    ret['num_tested'] = [num_tested for _ in fit_times]
+    # for m in test_measures_dicts[0]:
+    #     # transform list of dicts into dict of lists
+    #     # Same as in GridSearchCV.fit()
+    #     test_measures[m] = np.asarray([d[m] for d in test_measures_dicts])
+    #     ret['test_' + m] = test_measures[m]
+    #     if return_train_measures:
+    #         train_measures[m] = np.asarray([d[m] for d in
+    #                                         train_measures_dicts])
+    #         ret['train_' + m] = test_measures[m]
+
+    # ret['fit_time'] = fit_times
+    # ret['test_time'] = test_times
+    # ret['num_tested'] = num_tested
 
     if verbose:
-        print_summary(algo, measures, test_measures, train_measures, fit_times,
-                      test_times, cv.n_splits)
+        print(ret)
 
     return ret
 
 
 def fit_and_score(algo, trainset, testset, measures,
-                  return_train_measures=False, testset_name='standard'):
+                  return_train_measures=False, testset_name='standard', crossfold_index=None):
     '''Helper method that trains an algorithm and compute accuracy measures on
     a testset. Also report train and test times.
 
@@ -311,13 +374,15 @@ def fit_and_score(algo, trainset, testset, measures,
 
             - The testing time in seconds.
     '''
-
     start_fit = time.time()
     algo.fit(trainset)
     fit_time = time.time() - start_fit
     start_test = time.time()
     predictions = algo.test(testset)
     test_time = time.time() - start_test
+
+    if not predictions:
+        return {}, {}, 0, 0, 0, 0
 
     if return_train_measures:
         train_predictions = algo.test(trainset.build_testset())
@@ -337,7 +402,7 @@ def fit_and_score(algo, trainset, testset, measures,
         if return_train_measures:
             train_measures[m] = f(train_predictions, verbose=0)
 
-    return test_measures, train_measures, fit_time, test_time, len(testset)
+    return test_measures, train_measures, fit_time, test_time, len(testset), crossfold_index
 
 
 def print_summary(algo, measures, test_measures, train_measures, fit_times,
