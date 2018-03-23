@@ -359,6 +359,8 @@ def fit_and_score(algo, trainset, testset, measures,
         ret_measures = {}
         for key, val in testset.items():
             predictions = algo.test(val)
+            if not predictions:
+                return {}, {}, 0, 0, 0, 0
             test_time = time.time() - start_test
             test_measures = {}
             for m in measures:
