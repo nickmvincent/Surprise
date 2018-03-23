@@ -355,12 +355,12 @@ def fit_and_score(algo, trainset, testset, measures,
 
     # make a `train_measures` dict no matter what, for backwards compatability
     train_measures = {}
+    ret_measures = {}    
     if isinstance(testset, dict):
-        ret_measures = {}
         for key, val in testset.items():
             predictions = algo.test(val)
             if not predictions:
-                return {}, {}, 0, 0, 0, 0
+                continue
             test_time = time.time() - start_test
             test_measures = {}
             for m in measures:
