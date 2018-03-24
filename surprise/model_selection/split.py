@@ -141,12 +141,8 @@ class KFold():
         # We use indices to avoid shuffling the original data.raw_ratings list.
         user_id_indices = np.arange(len(all_user_ids))
 
-        tic = time.time()
         if self.shuffle:
             get_rng(self.random_state).shuffle(user_id_indices)
-        toc = time.time()
-        print('Shuffle took {}'.format(toc-tic))
-        tic = time.time()
         start, stop = 0, 0
         for fold_i in range(self.n_splits):
             start = stop
@@ -158,21 +154,20 @@ class KFold():
                                                                user_id_indices[stop:])]
             
             # kick out the "out group" (boycotting users)
-            uids_for_raw_trainset = [
+            uids_for_raw_trainset = set([
                 x for x in uids_for_raw_trainset if x not in out_user_ids
-            ]
+            ])
+            
 
             # get raw testset
-            uids_for_raw_testset = [all_user_ids[i] for i in user_id_indices[start:stop]]
-            uids_for_in_testset = [
+            uids_for_raw_testset = set([all_user_ids[i] for i in user_id_indices[start:stop]])
+            uids_for_in_testset = set([
                 x for x in uids_for_raw_testset if x not in out_user_ids
-            ]
-            toc = time.time()
-            print('process uids took {}'.format(toc-tic))
+            ])
             tic = time.time()
 
             raw_trainset, raw_testset, in_testset, out_testset = [], [], [], []
-
+            print(len(data.raw_ratings))
             for raw_rating_row in data.raw_ratings:
                 uid = raw_rating_row[0]
                 if uid in uids_for_raw_trainset:
@@ -189,15 +184,9 @@ class KFold():
             tic = time.time()
 
             trainset = data.construct_trainset(raw_trainset)
-            toc = time.time()
-            print('trainset took {}'.format(toc-tic))
-            tic = time.time()
             testset = data.construct_testset(raw_testset)
             in_testset = data.construct_testset(in_testset)
             out_testset = data.construct_testset(out_testset)
-            toc = time.time()
-            print('testsets took {}'.format(toc-tic))
-            tic = time.time()
 
             yield trainset, testset, in_testset, out_testset
 

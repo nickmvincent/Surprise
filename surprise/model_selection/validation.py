@@ -300,9 +300,9 @@ def cross_validate_users(algo, data, all_uids, out_uids, measures=None, cv=5,
             measures,
             return_train_measures, crossfold_index
         ]]
-    # toc = time.time() - tic
-    # print('It took {} seconds to iterate over crossfolds and put them into args_list'.format(toc))
-    # tic = time.time()
+    toc = time.time() - tic
+    print('It took {} seconds to iterate over crossfolds and put them into args_list'.format(toc))
+    tic = time.time()
     delayed_list = (
         delayed(fit_and_score)(
             algo, trainset, testsets, measures, return_train_measures, crossfold_index
