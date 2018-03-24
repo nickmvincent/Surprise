@@ -159,8 +159,6 @@ class KFold():
             uids_for_in_testset = [
                 x for x in uids_for_raw_testset if x not in out_user_ids
             ]
-            print(start, stop)
-            print((len(uids_for_raw_trainset), len(all_user_ids), len(out_user_ids)))
             raw_trainset, raw_testset, in_testset, out_testset = [], [], [], []
 
             for raw_rating_row in data.raw_ratings:

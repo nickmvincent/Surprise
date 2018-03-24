@@ -203,7 +203,6 @@ def merge_scores(fit_and_score_outputs):
             as_list.append(dict_with_int_keys[i])
         merged_ret[metric_name] = as_list
 
-    pprint(merged_ret)
 
     return dict(merged_ret)
 
