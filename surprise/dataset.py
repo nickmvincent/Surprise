@@ -321,6 +321,9 @@ class DatasetAutoFolds(Dataset):
                 yield seq[:start] + seq[stop:], seq[start:stop]
 
         return k_folds(self.raw_ratings, self.n_folds)
+    
+    def return_raw_data(self):
+        return self.raw_ratings
 
     def split(self, n_folds=5, shuffle=True):
         """

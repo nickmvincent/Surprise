@@ -217,8 +217,6 @@ class KFold():
             raw_intestset = []
             raw_outtestset = []
             for raw_rating_tuple in raw_testset:
-                print(raw_rating_tuple)
-                print(out_ids)
                 if raw_rating_tuple[0] in out_ids:
                     raw_outtestset.append(raw_rating_tuple)
                 else:
