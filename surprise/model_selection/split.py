@@ -189,7 +189,6 @@ class KFold():
         Yields:
             tuple of (trainset, testset)
         '''
-        tic = time.time()        
         if self.n_splits > len(data.raw_ratings) or self.n_splits < 2:
             raise ValueError('Incorrect value for n_splits={0}. '
                              'Must be >=2 and less than the number '
@@ -227,15 +226,14 @@ class KFold():
 
             # for each uid that will be tested upon, need to get a list of each rating row
             uid_to_list_of_rating_rows = defaultdict(list)
-
             # for each uid that will be tested upon, let's randomly create chunks and put them into the dict below
             uid_to_chunks = defaultdict(dict)
-            raw_trainset = []
+            base_raw_trainset = []
             for raw_rating_row in data.raw_ratings:
                 uid = raw_rating_row[0]
                 # if the uid is approved for training (i.e. the user is not boycotting and not in the testset)
                 if uid in uids_for_raw_trainset:
-                    raw_trainset.append(raw_rating_row)
+                    base_raw_trainset.append(raw_rating_row)
                 elif uid in uids_for_raw_testset:
                     uid_to_list_of_rating_rows[uid].append(raw_rating_row)
 
@@ -243,7 +241,6 @@ class KFold():
             
             
             for uid, list_of_rating_rows in uid_to_list_of_rating_rows.items():
-                # shuffle
                 get_rng(self.random_state).shuffle(list_of_rating_rows)
                 num_ratings_rows = len(list_of_rating_rows)
                 chunksize = num_ratings_rows // n_chunks
@@ -259,6 +256,9 @@ class KFold():
 
             for i_chunk in range(n_chunks):
                 raw_testset, in_testset, out_testset = [], [], []
+                # copy the base raw trainset into a NEW list.
+                # we are going to want to add more ratings, but make sure not to add overlapping ratings
+                raw_trainset_for_chunk_i = list(base_raw_trainset)
                 # let's figure out all the other possible chunk indices
                 other_chunk_indices = []
                 for j_chunk in range(n_chunks):
@@ -274,7 +274,7 @@ class KFold():
                         # so we should put the other chunks into the testset now!
                         # but only if this user is in the In-Group
                         for j_chunk in other_chunk_indices:
-                            raw_trainset += uid_to_chunks[uid][j_chunk]
+                            raw_trainset_for_chunk_i += uid_to_chunks[uid][j_chunk]
                     else:
                         out_testset += chunk
                 
@@ -282,15 +282,9 @@ class KFold():
                 assert(len(in_testset) + len(out_testset) == len(raw_testset))
                 print('This corresponds to {} testset ratings'.format(len(raw_testset)))
                 print('Train: {}, In: {}, Out: {}'.format(
-                    len(raw_trainset), len(in_testset), len(out_testset),
+                    len(raw_trainset_for_chunk_i), len(in_testset), len(out_testset),
                 ))
-
-                for row in raw_trainset:
-                    if row[0] in uids_for_raw_testset:
-                        print(row[0])
-                        print(uids_for_raw_testset)
-                        raise ValueError('BIG UID ERROR') 
-                trainset = data.construct_trainset(raw_trainset)
+                trainset = data.construct_trainset(raw_trainset_for_chunk_i)
                 testset = data.construct_testset(raw_testset)
                 in_testset = data.construct_testset(in_testset)
                 out_testset = data.construct_testset(out_testset)
