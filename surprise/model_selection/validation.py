@@ -171,7 +171,7 @@ def merge_scores(fit_and_score_outputs):
     #     'cv_index': 5
     # }
 
-
+    print('*', len(fit_and_score_outputs))
     for output in fit_and_score_outputs: # we don't know what order these are in
         test_metrics, _, fit_time, test_times, num_tested, cv_index = output
         cv_index = int(cv_index)
@@ -200,7 +200,10 @@ def merge_scores(fit_and_score_outputs):
     for metric_name, dict_with_int_keys in merged_ret.items():
         as_list = []
         for i in range(len(dict_with_int_keys.keys())):
-            as_list.append(dict_with_int_keys[i])
+            # why might a key be missing?
+            # if there were no Out-Group ratings, those metrics are not calculated
+            # There we set it to nan, and we can deal w/ this later with pandas
+            as_list.append(dict_with_int_keys.get(i, float('nan')))
         merged_ret[metric_name] = as_list
 
 
@@ -291,9 +294,9 @@ def cross_validate_users(algo, data, all_uids, out_uids, measures=None, cv=5,
     # number the crossfolds so we can keep track of them when/if they go out to threads
     # note that if you're threading at the experiment level this code doesn't do much b/c n_jobs will be set to 1.
 
-    # TODO: write a note about why we're using this weird pattern
+    # build all the args that will be sent out in parallel
     tic = time.time()
-    for crossfold_index, (trainset, testset, in_testset, out_testset) in enumerate(cv.custom_user_split(data, all_uids, out_uids)):
+    for crossfold_index, (trainset, testset, in_testset, out_testset) in enumerate(cv.custom_user_split_fraction(data, all_uids, out_uids)):
         args_list += [[
             algo, trainset,
             {'all': testset, 'in-group': in_testset, 'out-group': out_testset},
@@ -358,7 +361,7 @@ def fit_and_score(algo, trainset, testset, measures,
 
     # make a `train_measures` dict no matter what, for backwards compatability
     train_measures = {}
-    ret_measures = {}    
+    ret_measures = {}
     if isinstance(testset, dict):
         for key, val in testset.items():
             predictions = algo.test(val)

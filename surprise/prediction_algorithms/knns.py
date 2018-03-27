@@ -285,6 +285,7 @@ class KNNBaseline(SymmetricAlgo):
             return est
 
         neighbors = [(x2, self.sim[x, x2], r) for (x2, r) in self.yr[y]]
+
         k_neighbors = heapq.nlargest(self.k, neighbors, key=lambda t: t[1])
 
         # compute weighted average

@@ -152,7 +152,7 @@ def dcg_at_k(ratings):
 
     k is assumed to be the length of the input list
     args:
-        ratings: a list of numerical ratings (e.g. 1-5)
+        ratings: a list of relevance scores, e.g. explicit ratings 1-5
     returns:
         a dcg_at_k value
     """
@@ -168,7 +168,7 @@ def dcg_at_k(ratings):
 def precision10t4_recall10t4_ndcg10(predictions, verbose=True):
     """
     Return precision and recall at k metrics for each user.
-    Also returns dcg_at_k.
+    Also returns ndcg_at_k.
     https://en.wikipedia.org/wiki/Discounted_cumulative_gain
     """
     k = 10
@@ -180,17 +180,17 @@ def precision10t4_recall10t4_ndcg10(predictions, verbose=True):
 
     precisions, recalls, ndcgs = {}, {}, {}
     for uid, user_ratings in user_est_true.items():
-
-
         # Sort user ratings by estimated value
         user_ratings.sort(key=lambda x: x[0], reverse=True)
         # also need to sort by true value for Ideal DCG
         user_ratings_sorted_by_trueval = sorted(user_ratings, key=lambda x: x[1], reverse=True)
-        
-        top_k = user_ratings[:k]
 
+        top_k = user_ratings[:k]
         first_k_true_vals = [x[1] for x in user_ratings_sorted_by_trueval[:k]]
         first_k_pred_vals = [x[0] for x in top_k]
+
+        # assert(len(first_k_true_vals) == k)
+        # assert(len(first_k_pred_vals) == k)
         ideal_dcg = dcg_at_k(first_k_true_vals)
         pred_dcg = dcg_at_k(first_k_pred_vals)
         norm_dcg = pred_dcg / ideal_dcg if ideal_dcg else 0

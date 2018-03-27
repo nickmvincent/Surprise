@@ -106,10 +106,10 @@ class KFold():
             get_rng(self.random_state).shuffle(indices)
 
         start, stop = 0, 0
-        for fold_i in range(self.n_splits):
+        for i_fold in range(self.n_splits):
             start = stop
             stop += len(indices) // self.n_splits
-            if fold_i < len(indices) % self.n_splits:
+            if i_fold < len(indices) % self.n_splits:
                 stop += 1
 
             raw_trainset = [data.raw_ratings[i] for i in chain(indices[:start],
@@ -122,7 +122,7 @@ class KFold():
             yield trainset, testset
 
 
-    def custom_user_split(self, data, all_user_ids, out_user_ids):
+    def custom_rating_split(self, data, out_user_ids):
         '''Generator function to iterate over trainsets and testsets.
 
         Args:
@@ -139,107 +139,169 @@ class KFold():
                              'of ratings'.format(len(data.raw_ratings)))
 
         # We use indices to avoid shuffling the original data.raw_ratings list.
-        user_id_indices = np.arange(len(all_user_ids))
+        indices = np.arange(len(data.raw_ratings))
 
         if self.shuffle:
-            get_rng(self.random_state).shuffle(user_id_indices)
+            get_rng(self.random_state).shuffle(indices)
         start, stop = 0, 0
-        for fold_i in range(self.n_splits):
+        for i_fold in range(self.n_splits):
             start = stop
-            stop += len(user_id_indices) // self.n_splits
-            if fold_i < len(user_id_indices) % self.n_splits:
+            stop += len(indices) // self.n_splits
+            if i_fold < len(indices) % self.n_splits:
                 stop += 1
 
-            uids_for_raw_trainset = [all_user_ids[i] for i in chain(user_id_indices[:start],
-                                                               user_id_indices[stop:])]
-            
+            raw_trainset = [data.raw_ratings[i] for i in chain(indices[:start],
+                                                               indices[stop:])]
+            raw_testset = [data.raw_ratings[i] for i in indices[start:stop]]
+
             # kick out the "out group" (boycotting users)
-            uids_for_raw_trainset = set([
-                x for x in uids_for_raw_trainset if x not in out_user_ids
+            out_user_ids = set(out_user_ids)
+            boycott_trainset = set([
+                x for x in raw_trainset if x[0] not in out_user_ids
             ])
-            
 
-            # get raw testset
-            uids_for_raw_testset = set([all_user_ids[i] for i in user_id_indices[start:stop]])
-            uids_for_in_testset = set([
-                x for x in uids_for_raw_testset if x not in out_user_ids
-            ])
             tic = time.time()
-
-            raw_trainset, raw_testset, in_testset, out_testset = [], [], [], []
-            print(len(data.raw_ratings))
-            for raw_rating_row in data.raw_ratings:
+            in_testset, out_testset = [], []
+            for raw_rating_row in raw_testset:
                 uid = raw_rating_row[0]
-                if uid in uids_for_raw_trainset:
-                    raw_trainset.append(raw_rating_row)
+                if uid in out_user_ids:
+                    out_testset.append(raw_rating_row)
                 else:
-                    raw_testset.append(raw_rating_row)
-                    if uid in uids_for_in_testset:
-                        in_testset.append(raw_rating_row)
-                    else:
-                        out_testset.append(raw_rating_row)
+                    in_testset.append(raw_rating_row)
             
             toc = time.time()
             print('process raw lists took {}'.format(toc-tic))
-            tic = time.time()
 
-            trainset = data.construct_trainset(raw_trainset)
+            trainset = data.construct_trainset(boycott_trainset)
             testset = data.construct_testset(raw_testset)
             in_testset = data.construct_testset(in_testset)
             out_testset = data.construct_testset(out_testset)
 
             yield trainset, testset, in_testset, out_testset
 
-    def custom_split(self, data, out_ids):
-        '''custom generator function to iterate over trainsets and testsets.
-        this generator is special, because it will also include some data
-        from the "boycotters"
+    def custom_user_split_fraction(self, data, all_user_ids, out_user_ids):
+        '''Generator function to iterate over trainsets and testsets.
 
-        # TODO: must write tests for this.
         Args:
             data(:obj:`Dataset<surprise.dataset.Dataset>`): The data containing
                 ratings that will be devided into trainsets and testsets.
 
         Yields:
-            tuple of (trainset, testset, intestset, outtestset)
+            tuple of (trainset, testset)
         '''
-
+        tic = time.time()        
         if self.n_splits > len(data.raw_ratings) or self.n_splits < 2:
             raise ValueError('Incorrect value for n_splits={0}. '
                              'Must be >=2 and less than the number '
                              'of ratings'.format(len(data.raw_ratings)))
 
+        n_chunks = 2 # 2 chunks means each user will have ratings split into 2 chunks
+        out_user_ids = set(out_user_ids)
+        ret = []
+        
         # We use indices to avoid shuffling the original data.raw_ratings list.
-        indices = np.arange(len(data.raw_ratings))
+        user_id_indices = np.arange(len(all_user_ids))
 
         if self.shuffle:
-            get_rng(self.random_state).shuffle(indices)
-
+            get_rng(self.random_state).shuffle(user_id_indices)
         start, stop = 0, 0
-        for fold_i in range(self.n_splits):
+        for i_fold in range(self.n_splits):
             start = stop
-            stop += len(indices) // self.n_splits
-            if fold_i < len(indices) % self.n_splits:
+            stop += len(user_id_indices) // self.n_splits
+            if i_fold < len(user_id_indices) % self.n_splits:
                 stop += 1
 
-            raw_trainset = [data.raw_ratings[i] for i in chain(indices[:start],
-                                                               indices[stop:])]
-            raw_testset = [data.raw_ratings[i] for i in indices[start:stop]]
-            raw_intestset = []
-            raw_outtestset = []
-            for raw_rating_tuple in raw_testset:
-                if raw_rating_tuple[0] in out_ids:
-                    raw_outtestset.append(raw_rating_tuple)
-                else:
-                    raw_intestset.append(raw_rating_tuple)
+            uids_for_raw_trainset = [all_user_ids[i] for i in chain(user_id_indices[:start],
+                                                               user_id_indices[stop:])]
+            # kick out boycotting users
+            uids_for_raw_trainset = set([
+                x for x in uids_for_raw_trainset if x not in out_user_ids
+            ])
+            uids_for_raw_testset = set([
+                all_user_ids[i] for i in user_id_indices[start:stop]
+            ])
+            # boycotting users can't be in the In-Group testset
+            uids_for_in_testset = set([
+                x for x in uids_for_raw_testset if x not in out_user_ids
+            ])
 
+            # for each uid that will be tested upon, need to get a list of each rating row
+            uid_to_list_of_rating_rows = defaultdict(list)
 
-            trainset = data.construct_trainset(raw_trainset)
-            testset = data.construct_testset(raw_testset)
-            intestset = data.construct_testset(raw_intestset)
-            outtestset = data.construct_testset(raw_outtestset)
+            # for each uid that will be tested upon, let's randomly create chunks and put them into the dict below
+            uid_to_chunks = defaultdict(dict)
+            raw_trainset = []
+            for raw_rating_row in data.raw_ratings:
+                uid = raw_rating_row[0]
+                # if the uid is approved for training (i.e. the user is not boycotting and not in the testset)
+                if uid in uids_for_raw_trainset:
+                    raw_trainset.append(raw_rating_row)
+                elif uid in uids_for_raw_testset:
+                    uid_to_list_of_rating_rows[uid].append(raw_rating_row)
 
-            yield trainset, testset, intestset, outtestset
+            assert(len(uid_to_list_of_rating_rows) == len(uids_for_raw_testset))
+            
+            
+            for uid, list_of_rating_rows in uid_to_list_of_rating_rows.items():
+                # shuffle
+                get_rng(self.random_state).shuffle(list_of_rating_rows)
+                num_ratings_rows = len(list_of_rating_rows)
+                chunksize = num_ratings_rows // n_chunks
+                chunkstart, chunkstop = 0, 0
+                for i_chunk in range(n_chunks):
+                    chunkstart = chunkstop
+                    chunkstop += chunksize
+                    if i_chunk < num_ratings_rows % n_chunks:
+                        chunkstop += 1
+                    uid_to_chunks[uid][i_chunk] = list_of_rating_rows[chunkstart:chunkstop]
+            print('{} users out of {} in the testset'.format(len(uids_for_raw_testset), len(all_user_ids)))
+            assert(len(uid_to_list_of_rating_rows) == len(uid_to_chunks))
+
+            for i_chunk in range(n_chunks):
+                raw_testset, in_testset, out_testset = [], [], []
+                # let's figure out all the other possible chunk indices
+                other_chunk_indices = []
+                for j_chunk in range(n_chunks):
+                    if j_chunk != i_chunk:
+                        other_chunk_indices.append(j_chunk)
+                for uid in uid_to_list_of_rating_rows:
+                    chunk = uid_to_chunks[uid][i_chunk]
+                    raw_testset += chunk
+                    if uid in uids_for_in_testset:
+                        # this user is in the In-Group! So add these ratings to the in testset
+                        in_testset += chunk
+                        # we've allocated one chunk for testing
+                        # so we should put the other chunks into the testset now!
+                        # but only if this user is in the In-Group
+                        for j_chunk in other_chunk_indices:
+                            raw_trainset += uid_to_chunks[uid][j_chunk]
+                    else:
+                        out_testset += chunk
+                
+                       
+                assert(len(in_testset) + len(out_testset) == len(raw_testset))
+                print('This corresponds to {} testset ratings'.format(len(raw_testset)))
+                print('Train: {}, In: {}, Out: {}'.format(
+                    len(raw_trainset), len(in_testset), len(out_testset),
+                ))
+
+                for row in raw_trainset:
+                    if row[0] in uids_for_raw_testset:
+                        print(row[0])
+                        print(uids_for_raw_testset)
+                        raise ValueError('BIG UID ERROR') 
+                trainset = data.construct_trainset(raw_trainset)
+                testset = data.construct_testset(raw_testset)
+                in_testset = data.construct_testset(in_testset)
+                out_testset = data.construct_testset(out_testset)
+
+                ret.append([trainset, testset, in_testset, out_testset])
+        # todo: make this generator friendly again?
+        # toc = time.time()
+        # print('chunk based crossvalidation lists took {}'.format(toc-tic))
+        # tic = time.time()
+        assert(len(ret) == self.n_splits * n_chunks)
+        return ret
 
     def get_n_folds(self):
 
