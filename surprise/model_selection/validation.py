@@ -161,7 +161,6 @@ def merge_scores(fit_and_score_outputs):
         ...f
     }
     """
-    merged_ret = defaultdict(dict)
     # indices = {
     #     'test': 0, # this is where test stuff lives in the return tuple
     #     'train': 1,
@@ -170,8 +169,7 @@ def merge_scores(fit_and_score_outputs):
     #     'num_tested': 4,
     #     'cv_index': 5
     # }
-
-    print('*', len(fit_and_score_outputs))
+    merged_ret = defaultdict(dict)
     for output in fit_and_score_outputs: # we don't know what order these are in
         test_metrics, _, fit_time, test_times, num_tested, cv_index = output
         cv_index = int(cv_index)
@@ -199,7 +197,7 @@ def merge_scores(fit_and_score_outputs):
 
     for metric_name, dict_with_int_keys in merged_ret.items():
         as_list = []
-        for i in range(len(dict_with_int_keys.keys())):
+        for i in range(len(fit_and_score_outputs)):
             # why might a key be missing?
             # if there were no Out-Group ratings, those metrics are not calculated
             # There we set it to nan, and we can deal w/ this later with pandas
@@ -286,9 +284,7 @@ def cross_validate_users(algo, data, all_uids, out_uids, measures=None, cv=5,
 
     '''
     measures = [m.lower() for m in measures]
-
     cv = get_cv(cv)
-
     args_list = []
 
     # number the crossfolds so we can keep track of them when/if they go out to threads
@@ -303,9 +299,8 @@ def cross_validate_users(algo, data, all_uids, out_uids, measures=None, cv=5,
             measures,
             return_train_measures, crossfold_index
         ]]
-    toc = time.time() - tic
-    print('It took {} seconds to iterate over crossfolds and put them into args_list'.format(toc))
-    tic = time.time()
+    # toc = time.time() - tic
+    # print('It took {} seconds to iterate over crossfolds and put them into args_list'.format(toc))
     delayed_list = (
         delayed(fit_and_score)(
             algo, trainset, testsets, measures, return_train_measures, crossfold_index
@@ -363,8 +358,10 @@ def fit_and_score(algo, trainset, testset, measures,
     train_measures = {}
     ret_measures = {}
     if isinstance(testset, dict):
-        for key, val in testset.items():
-            predictions = algo.test(val)
+        # key is the testgroup (in, out, aggregate)
+        # val is the list of ratings
+        for key, specific_testset in testset.items():
+            predictions = algo.test(specific_testset)
             if not predictions:
                 continue
             test_time = time.time() - start_test
@@ -380,8 +377,9 @@ def fit_and_score(algo, trainset, testset, measures,
                     test_measures[m] = result
             ret_measures[key] = test_measures
             test_times[key] = test_time
-            num_tested[key] = len(val)
+            num_tested[key] = len(specific_testset)
 
+    # backward compatability
     else:
         predictions = algo.test(testset)
         test_time = time.time() - start_test                

@@ -277,13 +277,11 @@ class KFold():
                             raw_trainset_for_chunk_i += uid_to_chunks[uid][j_chunk]
                     else:
                         out_testset += chunk
-                
-                       
                 assert(len(in_testset) + len(out_testset) == len(raw_testset))
-                print('This corresponds to {} testset ratings'.format(len(raw_testset)))
-                print('Train: {}, In: {}, Out: {}'.format(
-                    len(raw_trainset_for_chunk_i), len(in_testset), len(out_testset),
-                ))
+                # print('This corresponds to {} testset ratings'.format(len(raw_testset)))
+                # print('Train: {}, In: {}, Out: {}'.format(
+                #     len(raw_trainset_for_chunk_i), len(in_testset), len(out_testset),
+                # ))
                 trainset = data.construct_trainset(raw_trainset_for_chunk_i)
                 testset = data.construct_testset(raw_testset)
                 in_testset = data.construct_testset(in_testset)
