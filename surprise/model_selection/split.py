@@ -170,7 +170,6 @@ class KFold():
                     in_testset.append(raw_rating_row)
             
             toc = time.time()
-            print('process raw lists took {}'.format(toc-tic))
 
             trainset = data.construct_trainset(boycott_trainset)
             testset = data.construct_testset(raw_testset)
@@ -251,7 +250,6 @@ class KFold():
                     if i_chunk < num_ratings_rows % n_chunks:
                         chunkstop += 1
                     uid_to_chunks[uid][i_chunk] = list_of_rating_rows[chunkstart:chunkstop]
-            print('{} users out of {} in the testset'.format(len(uids_for_raw_testset), len(all_user_ids)))
             assert(len(uid_to_list_of_rating_rows) == len(uid_to_chunks))
 
             for i_chunk in range(n_chunks):
@@ -288,10 +286,6 @@ class KFold():
                 out_testset = data.construct_testset(out_testset)
 
                 ret.append([trainset, testset, in_testset, out_testset])
-        # todo: make this generator friendly again?
-        # toc = time.time()
-        # print('chunk based crossvalidation lists took {}'.format(toc-tic))
-        # tic = time.time()
         assert(len(ret) == self.n_splits * n_chunks)
         return ret
 
