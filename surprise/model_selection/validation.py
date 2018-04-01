@@ -139,7 +139,7 @@ def merge_scores(fit_and_score_outputs):
     Each item in the list of results (fit_and_score_outputs) has a 
     test_measure_dict, train_measure_dict, fit_time, test_times, num_tested
 
-    Specifically for use with cross_validate_users. Re-use with care
+    Specifically for use with cross_validate_custom. Re-use with care
 
 
     Return values:
@@ -207,7 +207,7 @@ def merge_scores(fit_and_score_outputs):
 
     return dict(merged_ret)
 
-def cross_validate_users(algo, data, all_uids, out_uids, measures=None, cv=5,
+def cross_validate_custom(algo, nonboycott, boycott, boycott_uid_set, like_boycott_uid_set, measures=None, cv=5,
                    return_train_measures=False, n_jobs=-1,
                    pre_dispatch='2*n_jobs', verbose=False):
     '''
@@ -291,16 +291,23 @@ def cross_validate_users(algo, data, all_uids, out_uids, measures=None, cv=5,
     # note that if you're threading at the experiment level this code doesn't do much b/c n_jobs will be set to 1.
 
     # build all the args that will be sent out in parallel
-    tic = time.time()
-    for crossfold_index, (trainset, testset, in_testset, out_testset) in enumerate(cv.custom_user_split_fraction(data, all_uids, out_uids)):
+    for (
+            crossfold_index,
+            (
+                trainset, nonboycott_testset, boycott_testset,
+                like_boycott_but_testset, all_like_boycott_testset,
+                all_testset
+            )
+    ) in enumerate(cv.custom_rating_split(nonboycott, boycott, boycott_uid_set, like_boycott_uid_set)):
         args_list += [[
-            algo, trainset,
-            {'all': testset, 'in-group': in_testset, 'out-group': out_testset},
+            algo, trainset, {
+                'all': all_testset, 'non-boycott': nonboycott_testset,
+                'boycott': boycott_testset, 'like-boycott': like_boycott_but_testset,
+                'all-like-boycott': all_like_boycott_testset
+            },
             measures,
             return_train_measures, crossfold_index
         ]]
-    # toc = time.time() - tic
-    # print('It took {} seconds to iterate over crossfolds and put them into args_list'.format(toc))
     delayed_list = (
         delayed(fit_and_score)(
             algo, trainset, testsets, measures, return_train_measures, crossfold_index

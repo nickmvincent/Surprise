@@ -122,7 +122,7 @@ class KFold():
             yield trainset, testset
 
 
-    def custom_rating_split(self, data, out_user_ids):
+    def custom_rating_split(self, nonboycott, boycott, boycott_uid_set, like_boycott_uid_set):
         '''Generator function to iterate over trainsets and testsets.
 
         Args:
@@ -133,50 +133,69 @@ class KFold():
             tuple of (trainset, testset)
         '''
 
-        if self.n_splits > len(data.raw_ratings) or self.n_splits < 2:
+        if self.n_splits > len(nonboycott.raw_ratings) or self.n_splits < 2:
             raise ValueError('Incorrect value for n_splits={0}. '
                              'Must be >=2 and less than the number '
-                             'of ratings'.format(len(data.raw_ratings)))
+                             'of ratings'.format(len(nonboycott.raw_ratings)))
 
         # We use indices to avoid shuffling the original data.raw_ratings list.
-        indices = np.arange(len(data.raw_ratings))
+        indices = np.arange(len(nonboycott.raw_ratings))
+        boycott_indices = np.arange(len(boycott.raw_ratings))
+        ret = []
 
         if self.shuffle:
             get_rng(self.random_state).shuffle(indices)
+            get_rng(self.random_state).shuffle(boycott_indices)
         start, stop = 0, 0
+        boycott_start, boycott_stop = 0, 0
         for i_fold in range(self.n_splits):
             start = stop
             stop += len(indices) // self.n_splits
             if i_fold < len(indices) % self.n_splits:
                 stop += 1
 
-            raw_trainset = [data.raw_ratings[i] for i in chain(indices[:start],
+            boycott_start = boycott_stop
+            boycott_stop += len(boycott_indices) // self.n_splits
+            if i_fold < len(boycott_indices) % self.n_splits:
+                boycott_stop += 1
+
+            raw_trainset = [nonboycott.raw_ratings[i] for i in chain(indices[:start],
                                                                indices[stop:])]
-            raw_testset = [data.raw_ratings[i] for i in indices[start:stop]]
+            nonboycott_ratings_for_test = [nonboycott.raw_ratings[i] for i in indices[start:stop]]
 
-            # kick out the "out group" (boycotting users)
-            out_user_ids = set(out_user_ids)
-            boycott_trainset = set([
-                x for x in raw_trainset if x[0] not in out_user_ids
-            ])
-
-            tic = time.time()
-            in_testset, out_testset = [], []
-            for raw_rating_row in raw_testset:
-                uid = raw_rating_row[0]
-                if uid in out_user_ids:
-                    out_testset.append(raw_rating_row)
+            boycott_testratings = []
+            nonboycott_testratings = []
+            # full name: like-boycotting-users-but-not-boycotting
+            like_boycott_but_testratings = []            
+            for rating_row in nonboycott_ratings_for_test:
+                uid = rating_row[0]
+                if uid in boycott_uid_set:
+                    boycott_testratings.append(rating_row)
                 else:
-                    in_testset.append(raw_rating_row)
-            
-            toc = time.time()
+                    nonboycott_testratings.append(rating_row)
+                    if uid in like_boycott_uid_set:
+                        like_boycott_but_testratings.append(rating_row)
 
-            trainset = data.construct_trainset(boycott_trainset)
-            testset = data.construct_testset(raw_testset)
-            in_testset = data.construct_testset(in_testset)
-            out_testset = data.construct_testset(out_testset)
+            for rating_row in [
+                boycott.raw_ratings[i] for i in boycott_indices[boycott_start:boycott_stop]
+            ]:
+                boycott_testratings.append(rating_row)
+        
+            all_like_boycott_testratings = boycott_testratings + like_boycott_but_testratings
+            all_testratings = boycott_testratings + nonboycott_testratings
 
-            yield trainset, testset, in_testset, out_testset
+            # nonboycott is a Data() object with the construct_trainset methods
+            # whether we call nonboycott.construct_ or boycott.construct_ is arbitrary
+            trainset = nonboycott.construct_trainset(raw_trainset)
+
+            nonboycott_testset = nonboycott.construct_testset(nonboycott_testratings)
+            boycott_testset = nonboycott.construct_testset(boycott_testratings)
+            like_boycott_but_testset = nonboycott.construct_testset(like_boycott_but_testratings)
+            all_like_boycott_testset = nonboycott.construct_testset(all_like_boycott_testratings)
+            all_testset = nonboycott.construct_testset(all_testratings)
+
+            ret.append([trainset, nonboycott_testset, boycott_testset, like_boycott_but_testset, all_like_boycott_testset, all_testset])
+        return ret 
 
     def custom_user_split_fraction(self, data, all_user_ids, out_user_ids):
         '''Generator function to iterate over trainsets and testsets.
@@ -209,8 +228,11 @@ class KFold():
             if i_fold < len(user_id_indices) % self.n_splits:
                 stop += 1
 
-            uids_for_raw_trainset = [all_user_ids[i] for i in chain(user_id_indices[:start],
-                                                               user_id_indices[stop:])]
+            uids_for_raw_trainset = [
+                all_user_ids[i] for i in chain(
+                    user_id_indices[:start],
+                    user_id_indices[stop:])
+            ]
             # kick out boycotting users
             uids_for_raw_trainset = set([
                 x for x in uids_for_raw_trainset if x not in out_user_ids
@@ -235,10 +257,7 @@ class KFold():
                     base_raw_trainset.append(raw_rating_row)
                 elif uid in uids_for_raw_testset:
                     uid_to_list_of_rating_rows[uid].append(raw_rating_row)
-
-            assert(len(uid_to_list_of_rating_rows) == len(uids_for_raw_testset))
-            
-            
+            assert len(uid_to_list_of_rating_rows) == len(uids_for_raw_testset)
             for uid, list_of_rating_rows in uid_to_list_of_rating_rows.items():
                 get_rng(self.random_state).shuffle(list_of_rating_rows)
                 num_ratings_rows = len(list_of_rating_rows)

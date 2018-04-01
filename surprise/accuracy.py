@@ -132,15 +132,15 @@ def fcp(predictions, verbose=True):
     nd = np.mean(list(nd_u.values())) if nd_u else 0
 
     try:
-        fcp = nc / (nc + nd)
+        fcp_ = nc / (nc + nd)
     except ZeroDivisionError:
         raise ValueError('cannot compute fcp on this list of prediction. ' +
                          'Does every user have at least two predictions?')
 
     if verbose:
-        print('FCP:  {0:1.4f}'.format(fcp))
+        print('FCP:  {0:1.4f}'.format(fcp_))
 
-    return fcp
+    return fcp_
 
 
 def dcg_at_k(ratings):
@@ -170,6 +170,7 @@ def precision10t4_recall10t4_ndcg10(predictions, verbose=True):
     Return precision and recall at k metrics for each user.
     Also returns ndcg_at_k.
     https://en.wikipedia.org/wiki/Discounted_cumulative_gain
+
     """
     k = 10
     threshold = 4
@@ -181,19 +182,17 @@ def precision10t4_recall10t4_ndcg10(predictions, verbose=True):
     precisions, recalls, ndcgs = {}, {}, {}
     for uid, user_ratings in user_est_true.items():
         # Sort user ratings by estimated value
-        user_ratings.sort(key=lambda x: x[0], reverse=True)
+        user_ratings_sorted_by_est = sorted(user_ratings, key=lambda x: x[0], reverse=True)
         # also need to sort by true value for Ideal DCG
-        user_ratings_sorted_by_trueval = sorted(user_ratings, key=lambda x: x[1], reverse=True)
+        user_ratings_sorted_by_true = sorted(user_ratings, key=lambda x: x[1], reverse=True)
 
-        top_k = user_ratings[:k]
-        first_k_true_vals = [x[1] for x in user_ratings_sorted_by_trueval[:k]]
-        first_k_pred_vals = [x[0] for x in top_k]
+        top_k = user_ratings_sorted_by_est[:k]
+        true_ratings_of_first_k_true = [x[1] for x in user_ratings_sorted_by_true[:k]]
+        true_ratings_of_first_k_est = [x[1] for x in top_k]
 
-        # assert(len(first_k_true_vals) == k)
-        # assert(len(first_k_pred_vals) == k)
-        ideal_dcg = dcg_at_k(first_k_true_vals)
-        pred_dcg = dcg_at_k(first_k_pred_vals)
-        norm_dcg = pred_dcg / ideal_dcg if ideal_dcg else 0
+        ideal_dcg = dcg_at_k(true_ratings_of_first_k_true)
+        pred_dcg = dcg_at_k(true_ratings_of_first_k_est)
+        norm_dcg = pred_dcg / ideal_dcg
         ndcgs[uid] = norm_dcg
 
         # Number of relevant items
@@ -212,5 +211,7 @@ def precision10t4_recall10t4_ndcg10(predictions, verbose=True):
         # Recall@K: Proportion of relevant items that are recommended
         recalls[uid] = n_rel_and_rec_k / n_rel if n_rel != 0 else 1
 
+    if verbose:
+        print(ndcgs)
     return np.mean(list(precisions.values())), np.mean(list(recalls.values())), np.mean(list(ndcgs.values()))
 
