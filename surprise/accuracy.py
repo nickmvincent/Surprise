@@ -165,7 +165,7 @@ def dcg_at_k(ratings):
     ])
 
 
-def precision10t4_recall10t4_ndcg10(predictions, verbose=True):
+def precision10t4_recall10t4_ndcg10_ndcg5_ndcgfull(predictions, verbose=True):
     """
     Return precision and recall at k metrics for each user.
     Also returns ndcg_at_k.
@@ -179,7 +179,7 @@ def precision10t4_recall10t4_ndcg10(predictions, verbose=True):
     for uid, _, true_r, est, _ in predictions:
         user_est_true[uid].append((est, true_r))
 
-    precisions, recalls, ndcgs = {}, {}, {}
+    precisions, recalls, ndcg10, ndcg5, ndcgfull = {}, {}, {}, {}, {}
     for uid, user_ratings in user_est_true.items():
         # Sort user ratings by estimated value
         user_ratings_sorted_by_est = sorted(user_ratings, key=lambda x: x[0], reverse=True)
@@ -187,14 +187,21 @@ def precision10t4_recall10t4_ndcg10(predictions, verbose=True):
         user_ratings_sorted_by_true = sorted(user_ratings, key=lambda x: x[1], reverse=True)
 
         top_k = user_ratings_sorted_by_est[:k]
-        true_ratings_of_first_k_true = [x[1] for x in user_ratings_sorted_by_true[:k]]
-        true_ratings_of_first_k_est = [x[1] for x in top_k]
 
-        ideal_dcg = dcg_at_k(true_ratings_of_first_k_true)
-        pred_dcg = dcg_at_k(true_ratings_of_first_k_est)
-        norm_dcg = pred_dcg / ideal_dcg
-        ndcgs[uid] = norm_dcg
+        num_ratings = len(user_ratings)
+        for k_for_ndcg, outdict in (
+            (10, ndcg10),
+            (5, ndcg5),
+            (num_ratings, ndcgfull),
+        ):
+            if num_ratings >= k_for_ndcg:
+                true_ratings_of_first_k_true = [x[1] for x in user_ratings_sorted_by_true[:k_for_ndcg]]
+                true_ratings_of_first_k_est = [x[1] for x in  user_ratings_sorted_by_est[:k_for_ndcg]]
 
+                ideal_dcg = dcg_at_k(true_ratings_of_first_k_true)
+                pred_dcg = dcg_at_k(true_ratings_of_first_k_est)
+                norm_dcg = pred_dcg / ideal_dcg
+                outdict[uid] = norm_dcg
         # Number of relevant items
         n_rel = sum((true_r >= threshold) for (_, true_r) in user_ratings)
 
@@ -212,6 +219,6 @@ def precision10t4_recall10t4_ndcg10(predictions, verbose=True):
         recalls[uid] = n_rel_and_rec_k / n_rel if n_rel != 0 else 1
 
     if verbose:
-        print(ndcgs)
-    return np.mean(list(precisions.values())), np.mean(list(recalls.values())), np.mean(list(ndcgs.values()))
+        print(ndcgfull)
+    return np.mean(list(precisions.values())), np.mean(list(recalls.values())), np.mean(list(ndcg10.values())), np.mean(list(ndcg5.values())), np.mean(list(ndcgfull.values()))
 
