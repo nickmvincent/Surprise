@@ -143,7 +143,7 @@ def merge_scores(fit_and_score_outputs):
 
 
     Return values:
-    rett should look like this
+    ret should look like this
     {
         'all': {
             test_rmse: [1, 0.8, ...],
@@ -199,11 +199,10 @@ def merge_scores(fit_and_score_outputs):
         as_list = []
         for i in range(len(fit_and_score_outputs)):
             # why might a key be missing?
-            # if there were no Out-Group ratings, those metrics are not calculated
-            # There we set it to nan, and we can deal w/ this later with pandas
+            # if there were no like-boycott ratings, those metrics are not calculated
+            # Here we set it to nan, and we can deal w/ this later
             as_list.append(dict_with_int_keys.get(i, float('nan')))
         merged_ret[metric_name] = as_list
-
 
     return dict(merged_ret)
 
@@ -294,6 +293,7 @@ def cross_validate_custom(algo, nonboycott, boycott, boycott_uid_set, like_boyco
     for (
             crossfold_index,
             (
+                # flag
                 trainset, nonboycott_testset, boycott_testset,
                 like_boycott_but_testset, all_like_boycott_testset,
                 all_testset
@@ -365,7 +365,7 @@ def fit_and_score(algo, trainset, testset, measures,
     train_measures = {}
     ret_measures = {}
     if isinstance(testset, dict):
-        # key is the testgroup (in, out, aggregate)
+        # key is the testgroup (non-boycott, boycott, etc)
         # val is the list of ratings
         for key, specific_testset in testset.items():
             predictions = algo.test(specific_testset)
@@ -379,7 +379,9 @@ def fit_and_score(algo, trainset, testset, measures,
                 if isinstance(result, tuple):
                     sub_measures = m.split('_')
                     for i_sm, sub_measure in enumerate(sub_measures):
-                        test_measures[sub_measure] = result[i_sm]
+                        mean_val, frac_of_users = result[i_sm]
+                        test_measures[sub_measure] = mean_val
+                        test_measures[sub_measure + '_frac'] = frac_of_users
                 else:
                     test_measures[m] = result
             ret_measures[key] = test_measures
@@ -401,7 +403,9 @@ def fit_and_score(algo, trainset, testset, measures,
             if isinstance(result, tuple):
                 sub_measures = m.split('_')
                 for i_sm, sub_measure in enumerate(sub_measures):
-                    test_measures[sub_measure] = result[i_sm]
+                    mean_val, frac_of_users = result[i_sm]
+                    test_measures[sub_measure] = mean_val
+                    test_measures[sub_measure + '_frac'] = frac_of_users
             else:
                 test_measures[m] = result
             # TODO: support return train measures (Copy or abstract the above code...)

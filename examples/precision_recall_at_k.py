@@ -11,7 +11,7 @@ from surprise import SVD
 from surprise.model_selection import KFold
 
 
-def precision_recall_at_k(predictions, k=10, threshold=3.5):
+def precision_recall_at_k(predictions, k=10, threshold=4):
     '''Return precision and recall at k metrics for each user.'''
 
     # First map the predictions to each user.

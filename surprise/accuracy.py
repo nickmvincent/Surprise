@@ -165,28 +165,26 @@ def dcg_at_k(ratings):
     ])
 
 
-def precision10t4_recall10t4_ndcg10_ndcg5_ndcgfull(predictions, verbose=True):
+def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull(predictions, verbose=True):
     """
     Return precision and recall at k metrics for each user.
     Also returns ndcg_at_k.
     https://en.wikipedia.org/wiki/Discounted_cumulative_gain
 
     """
-    k = 10
     threshold = 4
     # First map the predictions to each user.
     user_est_true = defaultdict(list)
     for uid, _, true_r, est, _ in predictions:
         user_est_true[uid].append((est, true_r))
 
-    precisions, recalls, ndcg10, ndcg5, ndcgfull = {}, {}, {}, {}, {}
+    prec10, prec5, rec10, rec5 = {}, {}, {}, {}
+    ndcg10, ndcg5, ndcgfull = {}, {}, {}
     for uid, user_ratings in user_est_true.items():
         # Sort user ratings by estimated value
         user_ratings_sorted_by_est = sorted(user_ratings, key=lambda x: x[0], reverse=True)
         # also need to sort by true value for Ideal DCG
         user_ratings_sorted_by_true = sorted(user_ratings, key=lambda x: x[1], reverse=True)
-
-        top_k = user_ratings_sorted_by_est[:k]
 
         num_ratings = len(user_ratings)
         for k_for_ndcg, outdict in (
@@ -205,20 +203,39 @@ def precision10t4_recall10t4_ndcg10_ndcg5_ndcgfull(predictions, verbose=True):
         # Number of relevant items
         n_rel = sum((true_r >= threshold) for (_, true_r) in user_ratings)
 
-        # Number of recommended items in top k
-        n_rec_k = sum((est >= threshold) for (est, _) in top_k)
+        for k_for_precrec, precdic, recdic in (
+            (10, prec10, rec10),
+            (5, prec5, rec5)
+        ):
+            # Number of recommended items in top k
+            top_k = user_ratings_sorted_by_est[:k_for_precrec]
+            # n_rec_k = sum((est >= threshold) for (est, _) in top_k)
+            n_rel_k = sum((true_r >= threshold) for (_, true_r) in top_k)
 
-        # Number of relevant and recommended items in top k
-        n_rel_and_rec_k = sum(((true_r >= threshold) and (est >= threshold))
-                              for (est, true_r) in top_k)
+            # Number of relevant and recommended items in top k
+            # n_rel_and_rec_k = sum(((true_r >= threshold) and (est >= threshold))
+            #                     for (est, true_r) in top_k)
 
-        # Precision@K: Proportion of recommended items that are relevant
-        precisions[uid] = n_rel_and_rec_k / n_rec_k if n_rec_k != 0 else 1
-
-        # Recall@K: Proportion of relevant items that are recommended
-        recalls[uid] = n_rel_and_rec_k / n_rel if n_rel != 0 else 1
+            if n_rel:
+                precdic[uid] = n_rel_k / min(k_for_precrec, n_rel)
+            if n_rel:
+                recdic[uid] = n_rel_k / n_rel
 
     if verbose:
         print(ndcgfull)
-    return np.mean(list(precisions.values())), np.mean(list(recalls.values())), np.mean(list(ndcg10.values())), np.mean(list(ndcg5.values())), np.mean(list(ndcgfull.values()))
+    
+    n_users = len(user_est_true)
+    ret = (
+        (prec10.values(), len(prec10.values()) / n_users),
+        (prec5.values(), len(prec5.values()) / n_users),
+        (rec10.values(), len(rec10.values()) / n_users),
+        (rec5.values(), len(rec5.values()) / n_users),
+        (ndcg10.values(), len(ndcg10.values()) / n_users),
+        (ndcg5.values(), len(ndcg5.values()) / n_users),
+        (ndcgfull.values(), len(ndcgfull.values()) / n_users),
+    )
+    ret = tuple(
+        [(np.mean(list(vals)), [frac]) for (vals, frac) in ret]
+    )
+    return ret
 

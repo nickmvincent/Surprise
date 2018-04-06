@@ -123,14 +123,13 @@ class KFold():
 
 
     def custom_rating_split(self, nonboycott, boycott, boycott_uid_set, like_boycott_uid_set):
-        '''Generator function to iterate over trainsets and testsets.
+        '''function to iterate over trainsets and testsets.
 
         Args:
-            data(:obj:`Dataset<surprise.dataset.Dataset>`): The data containing
-                ratings that will be devided into trainsets and testsets.
+            todo
 
-        Yields:
-            tuple of (trainset, testset)
+        Returns:
+            list of [trainset, nonboycott_testset, boycott_testset, like_boycott_but_testset, all_like_boycott_testset, all_testset]
         '''
 
         if self.n_splits > len(nonboycott.raw_ratings) or self.n_splits < 2:
