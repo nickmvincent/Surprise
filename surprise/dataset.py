@@ -84,20 +84,18 @@ class Dataset:
 
         # if dataset does not exist, offer to download it
         if not os.path.isfile(dataset.path):
-            # answered = False
-            # FLAG: for AWS purposes only. May want to uncomment this later to avoid 
-            # unwanted donwloading on a user machine.
-            # while not answered:
-            #     print('Dataset ' + name + ' could not be found. Do you want '
-            #           'to download it? [Y/n] ', end='')
-            #     choice = input().lower()
+            answered = False
+            while not answered:
+                print('Dataset ' + name + ' could not be found. Do you want '
+                      'to download it? [Y/n] ', end='')
+                choice = input().lower()
 
-            #     if choice in ['yes', 'y', '', 'omg this is so nice of you!!']:
-            #         answered = True
-            #     elif choice in ['no', 'n', 'hell no why would i want that?!']:
-            #         answered = True
-            #         print("Ok then, I'm out!")
-            #         sys.exit()
+                if choice in ['yes', 'y', '', 'omg this is so nice of you!!']:
+                    answered = True
+                elif choice in ['no', 'n', 'hell no why would i want that?!']:
+                    answered = True
+                    print("Ok then, I'm out!")
+                    sys.exit()
 
             download_builtin_dataset(name)
 
