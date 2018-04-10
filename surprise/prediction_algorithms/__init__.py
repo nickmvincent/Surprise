@@ -32,6 +32,9 @@ from .matrix_factorization import SVDpp
 from .matrix_factorization import NMF
 from .slope_one import SlopeOne
 from .co_clustering import CoClustering
+from .bad_algos import GuessThree
+from .bad_algos import GlobalMean
+from .bad_algos import MovieMean
 
 from .predictions import PredictionImpossible
 from .predictions import Prediction
