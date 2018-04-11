@@ -209,12 +209,7 @@ def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull(predictions, verbose=T
         ):
             # Number of recommended items in top k
             top_k = user_ratings_sorted_by_est[:k_for_precrec]
-            # n_rec_k = sum((est >= threshold) for (est, _) in top_k)
             n_rel_k = sum((true_r >= threshold) for (_, true_r) in top_k)
-
-            # Number of relevant and recommended items in top k
-            # n_rel_and_rec_k = sum(((true_r >= threshold) and (est >= threshold))
-            #                     for (est, true_r) in top_k)
 
             if n_rel:
                 precdic[uid] = n_rel_k / min(k_for_precrec, n_rel)
