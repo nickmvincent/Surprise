@@ -165,7 +165,7 @@ def dcg_at_k(ratings):
     ])
 
 
-def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull(predictions, verbose=True):
+def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull(predictions, verbose=True, head_items=None):
     """
     Return precision and recall at k metrics for each user.
     Also returns ndcg_at_k.
@@ -175,7 +175,10 @@ def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull(predictions, verbose=T
     threshold = 4
     # First map the predictions to each user.
     user_est_true = defaultdict(list)
-    for uid, _, true_r, est, _ in predictions:
+    for uid, iid, true_r, est, _ in predictions:
+        if head_items:
+            if iid in head_items:
+                continue
         user_est_true[uid].append((est, true_r))
 
     prec10, prec5, rec10, rec5 = {}, {}, {}, {}
@@ -221,7 +224,7 @@ def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull(predictions, verbose=T
                 recdic[uid] = n_rel_k / n_rel
 
     if verbose:
-        print(ndcgfull)
+        pass
     
     n_users = len(user_est_true)
     ret = (

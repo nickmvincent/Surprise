@@ -6,6 +6,7 @@ from __future__ import (absolute_import, division, print_function,
 import time
 from pprint import pprint
 from collections import defaultdict
+from pprint import pprint
 
 import numpy as np
 from joblib import Parallel
@@ -211,15 +212,16 @@ def merge_scores(fit_and_score_outputs):
 # need some identying information about each uid_set
 def cross_validate_many(
         algo, data, empty_boycott_data, boycott_uid_sets, like_boycott_uid_sets, measures=None, cv=5,
-        n_jobs=-1, pre_dispatch='2*n_jobs', verbose=False
+        n_jobs=-1, pre_dispatch='2*n_jobs', verbose=False, head_items=None
     ):
-    '''
-    see cross_validate_docs
-
-    '''
+    """ see cross_validate( """
+    crossfold_index_to_args = {}
+    
     measures = [m.lower() for m in measures]
+    for i in range(cv):
+        crossfold_index_to_args[i] = []
     cv = get_cv(cv)
-    testsets = {}
+    cv.random_state = 0
     for (
         identifier, boycott_uid_set
     ), (
@@ -229,25 +231,36 @@ def cross_validate_many(
     ):
         assert identifier == identifier2
         for (
-                crossfold_index,
-                (
-                    trainset, nonboycott_testset, boycott_testset,
-                    like_boycott_but_testset, all_like_boycott_testset,
-                    all_testset
-                )
+            crossfold_index,
+            (
+                trainset, nonboycott_testset, boycott_testset,
+                like_boycott_but_testset, all_like_boycott_testset,
+                all_testset
+            )
         ) in enumerate(cv.custom_rating_split(data, empty_boycott_data, boycott_uid_set, like_boycott_uid_set)):
-                testsets.update({
-                    identifier + '_all': all_testset, 
-                    identifier + '_non-boycott': nonboycott_testset,
-                    identifier + '_boycott': boycott_testset,
-                    identifier + '_like-boycott': like_boycott_but_testset,
-                    identifier + '_all-like-boycott': all_like_boycott_testset
-                })
+                specific_testsets = {
+                    'all' + '__' + identifier: all_testset, 
+                    'non-boycott' + '__' + identifier: nonboycott_testset,
+                    'boycott' + '__' + identifier: boycott_testset,
+                    'like-boycott' + '__' + identifier: like_boycott_but_testset,
+                    'all-like-boycott' + '__' + identifier: all_like_boycott_testset
+                }
+                if crossfold_index_to_args[crossfold_index]:
+                    crossfold_index_to_args[crossfold_index][2].update(specific_testsets)
+                else:
+                    crossfold_index_to_args[crossfold_index] = [
+                        algo, trainset, specific_testsets, measures, False, crossfold_index
+                    ]
+                assert list(crossfold_index_to_args[crossfold_index][1].all_ratings()) == list(trainset.all_ratings())
+
+    args_list = []
+    for i in range(len(crossfold_index_to_args)):
+        args_list.append(crossfold_index_to_args[i])
+
     delayed_list = (
         delayed(fit_and_score)(
-            algo, trainset, testsets, measures, False, # return_train_measures
-            crossfold_index
-        )
+            algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items
+        ) for algo, trainset, testsets, measures, return_train_measures, crossfold_index in args_list
     )
     out = Parallel(n_jobs=n_jobs, pre_dispatch=pre_dispatch)(delayed_list)
     ret = merge_scores(out)
@@ -257,9 +270,10 @@ def cross_validate_many(
     return ret
 
 
-def cross_validate_custom(algo, nonboycott, boycott, boycott_uid_set, like_boycott_uid_set, measures=None, cv=5,
-                   return_train_measures=False, n_jobs=-1,
-                   pre_dispatch='2*n_jobs', verbose=False):
+def cross_validate_custom(
+        algo, nonboycott, boycott, boycott_uid_set, like_boycott_uid_set, measures=None, cv=5,
+        return_train_measures=False, n_jobs=-1,
+        pre_dispatch='2*n_jobs', verbose=False, head_items=None):
     '''
     Run a cross validation procedure for a given algorithm, reporting accuracy
     measures and computation times.
@@ -361,7 +375,7 @@ def cross_validate_custom(algo, nonboycott, boycott, boycott_uid_set, like_boyco
         ]]
     delayed_list = (
         delayed(fit_and_score)(
-            algo, trainset, testsets, measures, return_train_measures, crossfold_index
+            algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items
         ) for algo, trainset, testsets, measures, return_train_measures, crossfold_index in args_list
     )
     out = Parallel(n_jobs=n_jobs, pre_dispatch=pre_dispatch)(delayed_list)
@@ -372,8 +386,10 @@ def cross_validate_custom(algo, nonboycott, boycott, boycott_uid_set, like_boyco
     return ret
 
 
-def fit_and_score(algo, trainset, testset, measures,
-                  return_train_measures=False, crossfold_index=None):
+def fit_and_score(
+        algo, trainset, testset, measures,
+        return_train_measures=False, crossfold_index=None, head_items=None,
+    ):
     '''Helper method that trains an algorithm and compute accuracy measures on
     a testset. Also report train and test times.
 
@@ -426,15 +442,18 @@ def fit_and_score(algo, trainset, testset, measures,
             test_measures = {}
             for m in measures:
                 eval_func = getattr(accuracy, m.lower())
-                result = eval_func(predictions, verbose=0)
-                if isinstance(result, tuple):
+                if 'ndcg' in m:
+                    result = eval_func(predictions, verbose=0)
+                    tail_result = eval_func(predictions, verbose=0, head_items=head_items)
                     sub_measures = m.split('_')
                     for i_sm, sub_measure in enumerate(sub_measures):
                         mean_val, frac_of_users = result[i_sm]
+                        tail_mean_val, _ = tail_result[i_sm]
                         test_measures[sub_measure] = mean_val
                         test_measures[sub_measure + '_frac'] = frac_of_users
+                        test_measures['tail' + sub_measure] = tail_mean_val
                 else:
-                    test_measures[m] = result
+                    test_measures[m] = eval_func(predictions, verbose=0)
             ret_measures[key] = test_measures
             test_times[key] = test_time
             num_tested[key] = len(specific_testset)
