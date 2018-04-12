@@ -211,8 +211,12 @@ def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull(predictions, verbose=T
             top_k = user_ratings_sorted_by_est[:k_for_precrec]
             n_rel_k = sum((true_r >= threshold) for (_, true_r) in top_k)
 
+            prec_threshold = min(k_for_precrec, n_rel)
+            top_threshold = user_ratings_sorted_by_est[:prec_threshold]
+            n_rel_threshold = sum((true_r >= threshold) for (_, true_r) in top_threshold)
+
             if n_rel:
-                precdic[uid] = n_rel_k / min(k_for_precrec, n_rel)
+                precdic[uid] = n_rel_threshold / prec_threshold
             if n_rel:
                 recdic[uid] = n_rel_k / n_rel
 

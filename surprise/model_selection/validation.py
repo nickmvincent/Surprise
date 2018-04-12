@@ -206,6 +206,57 @@ def merge_scores(fit_and_score_outputs):
 
     return dict(merged_ret)
 
+
+# boycott_uid_sets should really be a dict
+# need some identying information about each uid_set
+def cross_validate_many(
+        algo, data, empty_boycott_data, boycott_uid_sets, like_boycott_uid_sets, measures=None, cv=5,
+        n_jobs=-1, pre_dispatch='2*n_jobs', verbose=False
+    ):
+    '''
+    see cross_validate_docs
+
+    '''
+    measures = [m.lower() for m in measures]
+    cv = get_cv(cv)
+    testsets = {}
+    for (
+        identifier, boycott_uid_set
+    ), (
+        identifier2, like_boycott_uid_set
+    ) in zip(
+            boycott_uid_sets.items(), like_boycott_uid_sets.items()
+    ):
+        assert identifier == identifier2
+        for (
+                crossfold_index,
+                (
+                    trainset, nonboycott_testset, boycott_testset,
+                    like_boycott_but_testset, all_like_boycott_testset,
+                    all_testset
+                )
+        ) in enumerate(cv.custom_rating_split(data, empty_boycott_data, boycott_uid_set, like_boycott_uid_set)):
+                testsets.update({
+                    identifier + '_all': all_testset, 
+                    identifier + '_non-boycott': nonboycott_testset,
+                    identifier + '_boycott': boycott_testset,
+                    identifier + '_like-boycott': like_boycott_but_testset,
+                    identifier + '_all-like-boycott': all_like_boycott_testset
+                })
+    delayed_list = (
+        delayed(fit_and_score)(
+            algo, trainset, testsets, measures, False, # return_train_measures
+            crossfold_index
+        )
+    )
+    out = Parallel(n_jobs=n_jobs, pre_dispatch=pre_dispatch)(delayed_list)
+    ret = merge_scores(out)
+    if verbose:
+        print(ret)
+
+    return ret
+
+
 def cross_validate_custom(algo, nonboycott, boycott, boycott_uid_set, like_boycott_uid_set, measures=None, cv=5,
                    return_train_measures=False, n_jobs=-1,
                    pre_dispatch='2*n_jobs', verbose=False):
