@@ -106,7 +106,7 @@ def cross_validate(algo, data, measures=['rmse', 'mae'], cv=None,
      train_measures_dicts,
      fit_times,
      test_times,
-     num_tested, crossfold_indices) = zip(*out)
+     num_tested, _) = zip(*out)
 
     test_measures = dict()
     train_measures = dict()
@@ -253,17 +253,16 @@ def cross_validate_many(
                     ]
                 assert list(crossfold_index_to_args[crossfold_index][1].all_ratings()) == list(trainset.all_ratings())
 
-    args_list = []
+    outputs = []
     for i in range(len(crossfold_index_to_args)):
-        args_list.append(crossfold_index_to_args[i])
+        algo, trainset, specific_testsets, measures, return_train_measures, crossfold_index = crossfold_index_to_args[i]
+        assert i == crossfold_index
+        output = fit_and_score_many(
+            algo, trainset, specific_testsets, measures, return_train_measures, crossfold_index, head_items
+        )
+        outputs.append(output)
 
-    delayed_list = (
-        delayed(fit_and_score)(
-            algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items
-        ) for algo, trainset, testsets, measures, return_train_measures, crossfold_index in args_list
-    )
-    out = Parallel(n_jobs=n_jobs, pre_dispatch=pre_dispatch)(delayed_list)
-    ret = merge_scores(out)
+    ret = merge_scores(outputs)
     if verbose:
         print(ret)
 
@@ -384,6 +383,81 @@ def cross_validate_custom(
         print(ret)
 
     return ret
+
+
+def batch(iterable, batch_size=1):
+    """make batches for  an iterable"""
+    num_items = len(iterable)
+    for ndx in range(0, num_items, batch_size):
+        yield iterable[ndx:min(ndx + batch_size, num_items)]
+
+
+def eval_task(key, algo, start_test, specific_testset, measures, head_items):
+    """
+    Evaluate on a specific testset.
+    This function exists to make evaluation easier to parallelize.
+    """
+    predictions = algo.test(specific_testset)
+    if not predictions:
+        return key, {}, 0, 0
+    test_time = time.time() - start_test
+    test_measures = {}
+    for m in measures:
+        eval_func = getattr(accuracy, m.lower())
+        if 'ndcg' in m:
+            result = eval_func(predictions, verbose=0)
+            tail_result = eval_func(predictions, verbose=0, head_items=head_items)
+            sub_measures = m.split('_')
+            for i_sm, sub_measure in enumerate(sub_measures):
+                mean_val, frac_of_users = result[i_sm]
+                tail_mean_val, _ = tail_result[i_sm]
+                test_measures[sub_measure] = mean_val
+                test_measures[sub_measure + '_frac'] = frac_of_users
+                test_measures['tail' + sub_measure] = tail_mean_val
+        else:
+            test_measures[m] = eval_func(predictions, verbose=0)
+    return key, test_measures, test_time, len(specific_testset)
+
+
+def fit_and_score_many(
+        algo, trainset, testset, measures,
+        return_train_measures=False, crossfold_index=None, head_items=None,
+    ):
+    """see fit and score"""
+    start_fit = time.time()
+    algo.fit(trainset)
+    fit_time = time.time() - start_fit
+    start_test = time.time()
+
+    test_times = {}
+    num_tested = {}
+
+    train_measures = {}
+    ret_measures = {}
+    if not isinstance(testset, dict):
+        raise ValueError()
+    # key is the testgroup (non-boycott, boycott, etc)
+    # val is the list of ratings
+    for key_batch in batch(list(testset.keys())):
+        specific_testsets = []
+        for key in key_batch:
+            specific_testsets.append(testset[key])
+        delayed_list = (
+            delayed(eval_task)(
+                key, algo, start_test, specific_testset, measures, head_items
+            ) for specific_testset in specific_testsets
+        )
+        out = Parallel(n_jobs=-1)(delayed_list)
+        for key, test_measures, specific_test_time, specific_num_tested in out:
+            if test_measures is None:
+                continue
+            ret_measures[key] = test_measures
+            test_times[key] = specific_test_time
+            num_tested[key] = specific_num_tested
+
+    return ret_measures, train_measures, fit_time, test_times, num_tested, crossfold_index
+
+
 
 
 def fit_and_score(
