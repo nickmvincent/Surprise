@@ -227,15 +227,20 @@ def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull(predictions, verbose=T
         pass
     
     n_users = len(user_est_true)
-    ret = (
-        (prec10.values(), len(prec10.values()) / n_users),
-        (prec5.values(), len(prec5.values()) / n_users),
-        (rec10.values(), len(rec10.values()) / n_users),
-        (rec5.values(), len(rec5.values()) / n_users),
-        (ndcg10.values(), len(ndcg10.values()) / n_users),
-        (ndcg5.values(), len(ndcg5.values()) / n_users),
-        (ndcgfull.values(), len(ndcgfull.values()) / n_users),
-    )
+    if n_users:
+        ret = (
+            (prec10.values(), len(prec10.values()) / n_users),
+            (prec5.values(), len(prec5.values()) / n_users),
+            (rec10.values(), len(rec10.values()) / n_users),
+            (rec5.values(), len(rec5.values()) / n_users),
+            (ndcg10.values(), len(ndcg10.values()) / n_users),
+            (ndcg5.values(), len(ndcg5.values()) / n_users),
+            (ndcgfull.values(), len(ndcgfull.values()) / n_users),
+        )
+    else:
+        ret = []
+        for _ in range(7):
+            ret.append([], float('nan'))
     ret = tuple(
         [(np.mean(list(vals)), [frac]) for (vals, frac) in ret]
     )
