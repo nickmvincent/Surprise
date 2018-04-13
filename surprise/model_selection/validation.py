@@ -438,7 +438,8 @@ def fit_and_score_many(
         raise ValueError()
     # key is the testgroup (non-boycott, boycott, etc)
     # val is the list of ratings
-    for key_batch in batch(list(testset.keys())):
+    for batch_num, key_batch in enumerate(batch(list(testset.keys()))):
+        print('batch number {} of crossfold {}. Batches have 250 testsets.'.format(batch_num, crossfold_index))
         specific_testsets = []
         for key in key_batch:
             specific_testsets.append(testset[key])
