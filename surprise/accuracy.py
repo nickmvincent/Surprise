@@ -240,7 +240,7 @@ def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull(predictions, verbose=T
     else:
         ret = []
         for _ in range(7):
-            ret.append([], float('nan'))
+            ret.append(([], float('nan')))
     ret = tuple(
         [(np.mean(list(vals)), [frac]) for (vals, frac) in ret]
     )
