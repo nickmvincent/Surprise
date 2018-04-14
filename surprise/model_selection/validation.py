@@ -279,6 +279,9 @@ def cross_validate_many(
         tic = time.time()
         algo, trainset, specific_testsets, measures, return_train_measures, crossfold_index = crossfold_index_to_args[i]
         assert i == crossfold_index
+        # specific_testsets - what does this like right here?
+        # one key per sourcefile/id and evaluation group
+        # e.g. all__SOMEFILE_0001 
         output = fit_and_score_many(
             algo, trainset, specific_testsets, measures, return_train_measures, crossfold_index, head_items
         )
@@ -422,13 +425,16 @@ def eval_task(key, algo, start_test, specific_testset, measures, head_items):
     predictions = algo.test(specific_testset)
     if not predictions:
         return key, {}, 0, 0
-    test_time = time.time() - start_test
+    test_time = time.time() - tic
+    print(test_time)
     test_measures = {}
     for m in measures:
         eval_func = getattr(accuracy, m.lower())
         result = eval_func(predictions, verbose=0)
         if 'ndcg' in m:
+            tic1 = time.time()
             tail_result = eval_func(predictions, verbose=0, head_items=head_items)
+            print('tail_result takes {}'.format(time.time() - tic1))
             sub_measures = m.split('_')
             for i_sm, sub_measure in enumerate(sub_measures):
                 mean_val, frac_of_users = result[i_sm]
@@ -465,6 +471,7 @@ def fit_and_score_many(
     tic = time.time()
     keys = list(testset.keys())
     batchsize = 1000
+    print(keys[:10])
     for batch_num, key_batch in enumerate(batch(keys, batchsize)):
         print('On batch number {} (key {} of {} total keys) of crossfold {}.'.format(batch_num, batch_num * batchsize, len(keys), crossfold_index))
         print('{} sec between eval batches.'.format(
