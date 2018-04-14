@@ -459,6 +459,7 @@ def fit_and_score_many(
         raise ValueError()
     # key is the testgroup (non-boycott, boycott, etc)
     # val is the list of ratings
+    tic = time.time()
     for batch_num, key_batch in enumerate(batch(list(testset.keys()), 50)):
         print('batch number {} of crossfold {}. Batches have 50 testsets.'.format(batch_num, crossfold_index))
         print('{} sec between eval batches.'.format(
