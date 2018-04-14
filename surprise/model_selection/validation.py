@@ -407,7 +407,7 @@ def cross_validate_custom(
 
 
 def batch(iterable, batch_size=1):
-    """make batches for  an iterable"""
+    """make batches for an iterable"""
     num_items = len(iterable)
     for ndx in range(0, num_items, batch_size):
         yield iterable[ndx:min(ndx + batch_size, num_items)]
@@ -459,8 +459,12 @@ def fit_and_score_many(
         raise ValueError()
     # key is the testgroup (non-boycott, boycott, etc)
     # val is the list of ratings
-    for batch_num, key_batch in enumerate(batch(list(testset.keys()), 250)):
-        print('batch number {} of crossfold {}. Batches have 250 testsets.'.format(batch_num, crossfold_index))
+    for batch_num, key_batch in enumerate(batch(list(testset.keys()), 50)):
+        print('batch number {} of crossfold {}. Batches have 50 testsets.'.format(batch_num, crossfold_index))
+        print('{} sec between eval batches.'.format(
+            time.time() - tic
+        ))
+        tic = time.time()
         specific_testsets = []
         for key in key_batch:
             specific_testsets.append(testset[key])

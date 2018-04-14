@@ -167,6 +167,7 @@ class KFold():
             row = {}
             tic = time.time()
             n = len(boycott_uid_sets)
+            count = 0
             for (
                 identifier, boycott_uid_set
             ), (
@@ -174,8 +175,10 @@ class KFold():
             ) in zip(
                     boycott_uid_sets.items(), like_boycott_uid_sets.items()
             ):
+                count += 1
                 assert identifier == identifier2
-                print('{} seconds since last tic (traversing sets), total expected is {}.'.format(time.time() - tic, n))
+                print('{} sec between sets. On set {} of {} in fold.'.format(
+                    time.time() - tic, count, n, i_fold))
                 tic = time.time()
                 boycott_testratings = []
                 nonboycott_testratings = []
