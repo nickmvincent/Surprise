@@ -164,7 +164,9 @@ class KFold():
 
             nonboycott_ratings_for_test = [nonboycott.raw_ratings[i] for i in indices[start:stop]]
 
-            row = {}           
+            row = {}
+            tic = time.time()
+            n = len(boycott_uid_sets)
             for (
                 identifier, boycott_uid_set
             ), (
@@ -173,6 +175,8 @@ class KFold():
                     boycott_uid_sets.items(), like_boycott_uid_sets.items()
             ):
                 assert identifier == identifier2
+                print('{} seconds since last tic (traversing sets), total expected is {}.'.format(time.time() - tic, n))
+                tic = time.time()
                 boycott_testratings = []
                 nonboycott_testratings = []
                 # full name: like-boycotting-users-but-not-boycotting
