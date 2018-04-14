@@ -231,15 +231,17 @@ def cross_validate_many(
         for identifier in boycott_uid_sets.keys():
             (
                 trainset, nonboycott_testset, boycott_testset,
-                like_boycott_but_testset, all_like_boycott_testset,
+                _, # like_boycott_but_testset, 
+                _, # all_like_boycott_testset,
                 all_testset
             ) = row[identifier]
             specific_testsets = {
                 'all' + '__' + identifier: all_testset, 
                 'non-boycott' + '__' + identifier: nonboycott_testset,
                 'boycott' + '__' + identifier: boycott_testset,
-                'like-boycott' + '__' + identifier: like_boycott_but_testset,
-                'all-like-boycott' + '__' + identifier: all_like_boycott_testset
+                # since these are only used for actually boycott conditions, we could skip for now to save time...
+                # 'like-boycott' + '__' + identifier: like_boycott_but_testset,
+                # 'all-like-boycott' + '__' + identifier: all_like_boycott_testset
             }
             if crossfold_index_to_args[crossfold_index]:
                 crossfold_index_to_args[crossfold_index][2].update(specific_testsets)
@@ -247,30 +249,6 @@ def cross_validate_many(
                 crossfold_index_to_args[crossfold_index] = [
                     algo, trainset, specific_testsets, measures, False, crossfold_index
                 ]
-            
-            # assert list(crossfold_index_to_args[crossfold_index][1].all_ratings()) == list(trainset.all_ratings())
-        # for (
-        #     crossfold_index,
-        #     (
-        #         trainset, nonboycott_testset, boycott_testset,
-        #         like_boycott_but_testset, all_like_boycott_testset,
-        #         all_testset
-        #     )
-        # ) in enumerate(cv.custom_rating_split(data, empty_boycott_data, boycott_uid_set, like_boycott_uid_set)):
-                # specific_testsets = {
-                #     'all' + '__' + identifier: all_testset, 
-                #     'non-boycott' + '__' + identifier: nonboycott_testset,
-                #     'boycott' + '__' + identifier: boycott_testset,
-                #     'like-boycott' + '__' + identifier: like_boycott_but_testset,
-                #     'all-like-boycott' + '__' + identifier: all_like_boycott_testset
-                # }
-                # if crossfold_index_to_args[crossfold_index]:
-                #     crossfold_index_to_args[crossfold_index][2].update(specific_testsets)
-                # else:
-                #     crossfold_index_to_args[crossfold_index] = [
-                #         algo, trainset, specific_testsets, measures, False, crossfold_index
-                #     ]
-                # assert list(crossfold_index_to_args[crossfold_index][1].all_ratings()) == list(trainset.all_ratings())
 
     outputs = []
     tic = time.time()
@@ -281,7 +259,7 @@ def cross_validate_many(
         assert i == crossfold_index
         # specific_testsets - what does this like right here?
         # one key per sourcefile/id and evaluation group
-        # e.g. all__SOMEFILE_0001 
+        # e.g. all__SOMEFILE_0001
         output = fit_and_score_many(
             algo, trainset, specific_testsets, measures, return_train_measures, crossfold_index, head_items
         )
@@ -426,7 +404,7 @@ def eval_task(key, algo, start_test, specific_testset, measures, head_items):
     if not predictions:
         return key, {}, 0, 0
     test_time = time.time() - tic
-    print(test_time)
+    print('test_time', test_time, 'len(predictions)', len(predictions))
     test_measures = {}
     for m in measures:
         eval_func = getattr(accuracy, m.lower())
@@ -470,7 +448,7 @@ def fit_and_score_many(
     # val is the list of ratings
     tic = time.time()
     keys = list(testset.keys())
-    batchsize = 1000
+    batchsize = 100
     print(keys[:10])
     for batch_num, key_batch in enumerate(batch(keys, batchsize)):
         print('On batch number {} (key {} of {} total keys) of crossfold {}.'.format(batch_num, batch_num * batchsize, len(keys), crossfold_index))
@@ -486,7 +464,7 @@ def fit_and_score_many(
                 key, algo, start_test, specific_testset, measures, head_items
             ) for specific_testset, key in specific_testsets
         )
-        out = Parallel(n_jobs=-1, max_nbytes=1e6)(delayed_list)
+        out = Parallel(n_jobs=-1)(delayed_list)
         for key, test_measures, specific_test_time, specific_num_tested in out:
             if test_measures is None:
                 continue
