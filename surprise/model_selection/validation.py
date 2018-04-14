@@ -425,8 +425,8 @@ def eval_task(key, algo, start_test, specific_testset, measures, head_items):
     test_measures = {}
     for m in measures:
         eval_func = getattr(accuracy, m.lower())
+        result = eval_func(predictions, verbose=0)
         if 'ndcg' in m:
-            result = eval_func(predictions, verbose=0)
             tail_result = eval_func(predictions, verbose=0, head_items=head_items)
             sub_measures = m.split('_')
             for i_sm, sub_measure in enumerate(sub_measures):
@@ -436,7 +436,7 @@ def eval_task(key, algo, start_test, specific_testset, measures, head_items):
                 test_measures[sub_measure + '_frac'] = frac_of_users
                 test_measures['tail' + sub_measure] = tail_mean_val
         else:
-            test_measures[m] = eval_func(predictions, verbose=0)
+            test_measures[m] = result
     return key, test_measures, test_time, len(specific_testset)
 
 
@@ -461,8 +461,10 @@ def fit_and_score_many(
     # key is the testgroup (non-boycott, boycott, etc)
     # val is the list of ratings
     tic = time.time()
-    for batch_num, key_batch in enumerate(batch(list(testset.keys()), 50)):
-        print('batch number {} of crossfold {}. Batches have 50 testsets.'.format(batch_num, crossfold_index))
+    keys = list(testset.keys())
+    batchsize = 1000
+    for batch_num, key_batch in enumerate(batch(keys, batchsize)):
+        print('On batch number {} (key {} of {} total keys) of crossfold {}.'.format(batch_num, batch_num * batchsize, len(keys), crossfold_index))
         print('{} sec between eval batches.'.format(
             time.time() - tic
         ))
