@@ -248,7 +248,7 @@ def cross_validate_many(
                     algo, trainset, specific_testsets, measures, False, crossfold_index
                 ]
             
-            assert list(crossfold_index_to_args[crossfold_index][1].all_ratings()) == list(trainset.all_ratings())
+            # assert list(crossfold_index_to_args[crossfold_index][1].all_ratings()) == list(trainset.all_ratings())
         # for (
         #     crossfold_index,
         #     (
@@ -448,6 +448,7 @@ def fit_and_score_many(
     start_fit = time.time()
     algo.fit(trainset)
     fit_time = time.time() - start_fit
+    print('fit_time', fit_time)
     start_test = time.time()
 
     test_times = {}
@@ -468,11 +469,11 @@ def fit_and_score_many(
         tic = time.time()
         specific_testsets = []
         for key in key_batch:
-            specific_testsets.append(testset[key])
+            specific_testsets.append((testset[key], key))
         delayed_list = (
             delayed(eval_task)(
                 key, algo, start_test, specific_testset, measures, head_items
-            ) for specific_testset in specific_testsets
+            ) for specific_testset, key in specific_testsets
         )
         out = Parallel(n_jobs=-1)(delayed_list)
         for key, test_measures, specific_test_time, specific_num_tested in out:

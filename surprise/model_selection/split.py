@@ -164,6 +164,11 @@ class KFold():
 
             nonboycott_ratings_for_test = [nonboycott.raw_ratings[i] for i in indices[start:stop]]
 
+
+            # nonboycott is a Data() object with the construct_trainset methods
+            # whether we call nonboycott.construct_ or boycott.construct_ is arbitrary
+            trainset = nonboycott.construct_trainset(raw_trainset)
+
             row = {}
             tic = time.time()
             n = len(boycott_uid_sets)
@@ -176,8 +181,10 @@ class KFold():
                     boycott_uid_sets.items(), like_boycott_uid_sets.items()
             ):
                 count += 1
+                # this is probably a good assert to keep b/c iteration of python dictionaries is weird
+                # but this works as is, so no need for OrderedDict
                 assert identifier == identifier2
-                print('{} sec between sets. On set {} of {} in fold.'.format(
+                print('{} sec between sets. On set {} of {} in fold {}.'.format(
                     time.time() - tic, count, n, i_fold))
                 tic = time.time()
                 boycott_testratings = []
@@ -200,10 +207,6 @@ class KFold():
             
                 all_like_boycott_testratings = boycott_testratings + like_boycott_but_testratings
                 all_testratings = boycott_testratings + nonboycott_testratings
-
-                # nonboycott is a Data() object with the construct_trainset methods
-                # whether we call nonboycott.construct_ or boycott.construct_ is arbitrary
-                trainset = nonboycott.construct_trainset(raw_trainset)
 
                 nonboycott_testset = nonboycott.construct_testset(nonboycott_testratings)
                 boycott_testset = nonboycott.construct_testset(boycott_testratings)
