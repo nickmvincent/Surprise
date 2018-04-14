@@ -132,6 +132,7 @@ class KFold():
         Returns:
             list of [trainset, nonboycott_testset, boycott_testset, like_boycott_but_testset, all_like_boycott_testset, all_testset]
         '''
+        tic = time.time()
 
         if self.n_splits > len(nonboycott.raw_ratings) or self.n_splits < 2:
             raise ValueError('Incorrect value for n_splits={0}. '
@@ -170,8 +171,7 @@ class KFold():
             trainset = nonboycott.construct_trainset(raw_trainset)
 
             row = {}
-            tic = time.time()
-            n = len(boycott_uid_sets)
+            
             count = 0
             for (
                 identifier, boycott_uid_set
@@ -184,9 +184,6 @@ class KFold():
                 # this is probably a good assert to keep b/c iteration of python dictionaries is weird
                 # but this works as is, so no need for OrderedDict
                 assert identifier == identifier2
-                print('{} sec between sets. On set {} of {} in fold {}.'.format(
-                    time.time() - tic, count, n, i_fold))
-                tic = time.time()
                 boycott_testratings = []
                 nonboycott_testratings = []
                 # full name: like-boycotting-users-but-not-boycotting
@@ -216,6 +213,7 @@ class KFold():
 
                 row[identifier] = [trainset, nonboycott_testset, boycott_testset, like_boycott_but_testset, all_like_boycott_testset, all_testset]
             ret.append(row)
+        print('Splitting takes {}'.format(time.time() - tic))
         return ret 
 
     def custom_user_split_fraction(self, data, all_user_ids, out_user_ids):

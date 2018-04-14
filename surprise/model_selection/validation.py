@@ -216,7 +216,6 @@ def cross_validate_many(
     ):
     """ see cross_validate( """
     crossfold_index_to_args = {}
-    tic = time.time()
     
     measures = [m.lower() for m in measures]
     for i in range(cv):
@@ -226,8 +225,6 @@ def cross_validate_many(
     for (
         crossfold_index, row
     ) in enumerate(cv.custom_rating_split(data, empty_boycott_data, boycott_uid_sets, like_boycott_uid_sets)):
-        print('{} seconds since last tic (splitting)'.format(time.time() - tic))
-        tic = time.time()
         for identifier in boycott_uid_sets.keys():
             (
                 trainset, nonboycott_testset, boycott_testset,
@@ -251,10 +248,7 @@ def cross_validate_many(
                 ]
 
     outputs = []
-    tic = time.time()
     for i in range(len(crossfold_index_to_args)):
-        print('{} seconds since last tic (doing crossfolds)'.format(time.time() - tic))
-        tic = time.time()
         algo, trainset, specific_testsets, measures, return_train_measures, crossfold_index = crossfold_index_to_args[i]
         assert i == crossfold_index
         # specific_testsets - what does this like right here?
@@ -394,36 +388,37 @@ def batch(iterable, batch_size=1):
         yield iterable[ndx:min(ndx + batch_size, num_items)]
 
 
-def eval_task(key, algo, start_test, specific_testset, measures, head_items):
+def eval_task(algo, start_test, specific_testsets, measures, head_items):
     """
     Evaluate on a specific testset.
     This function exists to make evaluation easier to parallelize.
     """
-    tic = time.time()
-    predictions = algo.test(specific_testset)
-    if not predictions:
-        return key, {}, 0, 0
-    test_time = time.time() - tic
-    print('test_time', test_time, 'len(predictions)', len(predictions))
-    test_measures = {}
-    for m in measures:
-        eval_func = getattr(accuracy, m.lower())
-        result = eval_func(predictions, verbose=0)
-        if 'ndcg' in m:
-            tic1 = time.time()
-            tail_result = eval_func(predictions, verbose=0, head_items=head_items)
-            print('tail_result takes {}'.format(time.time() - tic1))
-            sub_measures = m.split('_')
-            for i_sm, sub_measure in enumerate(sub_measures):
-                mean_val, frac_of_users = result[i_sm]
-                tail_mean_val, _ = tail_result[i_sm]
-                test_measures[sub_measure] = mean_val
-                test_measures[sub_measure + '_frac'] = frac_of_users
-                test_measures['tail' + sub_measure] = tail_mean_val
-        else:
-            test_measures[m] = result
-    print('1 eval task takes {}'.format(time.time() - tic))
-    return key, test_measures, test_time, len(specific_testset)
+    ret = []
+    count = 0
+    for key, specific_testset in specific_testsets.items():
+        count += 1
+        tic = time.time()
+        predictions = algo.test(specific_testset)
+        if not predictions:
+            return key, {}, 0, 0
+        test_time = time.time() - tic
+        test_measures = {}
+        for m in measures:
+            eval_func = getattr(accuracy, m.lower())
+            result = eval_func(predictions, verbose=0)
+            if 'ndcg' in m:
+                tail_result = eval_func(predictions, verbose=0, head_items=head_items)
+                sub_measures = m.split('_')
+                for i_sm, sub_measure in enumerate(sub_measures):
+                    mean_val, frac_of_users = result[i_sm]
+                    tail_mean_val, _ = tail_result[i_sm]
+                    test_measures[sub_measure] = mean_val
+                    test_measures[sub_measure + '_frac'] = frac_of_users
+                    test_measures['tail' + sub_measure] = tail_mean_val
+            else:
+                test_measures[m] = result
+        ret.append([key, test_measures, test_time, len(specific_testset)])
+    return ret
 
 
 def fit_and_score_many(
@@ -434,7 +429,6 @@ def fit_and_score_many(
     start_fit = time.time()
     algo.fit(trainset)
     fit_time = time.time() - start_fit
-    print('fit_time', fit_time)
     start_test = time.time()
 
     test_times = {}
@@ -446,31 +440,28 @@ def fit_and_score_many(
         raise ValueError()
     # key is the testgroup (non-boycott, boycott, etc)
     # val is the list of ratings
-    tic = time.time()
     keys = list(testset.keys())
-    batchsize = 100
-    print(keys[:10])
-    for batch_num, key_batch in enumerate(batch(keys, batchsize)):
-        print('On batch number {} (key {} of {} total keys) of crossfold {}.'.format(batch_num, batch_num * batchsize, len(keys), crossfold_index))
-        print('{} sec between eval batches.'.format(
-            time.time() - tic
-        ))
-        tic = time.time()
-        specific_testsets = []
+    batchsize = 10
+    delayed_list = []
+    for _, key_batch in enumerate(batch(keys, batchsize)):
+        specific_testsets = {}
         for key in key_batch:
-            specific_testsets.append((testset[key], key))
-        delayed_list = (
+            specific_testsets[key] = testset[key]
+        delayed_list.append(
             delayed(eval_task)(
-                key, algo, start_test, specific_testset, measures, head_items
-            ) for specific_testset, key in specific_testsets
+                algo, start_test, specific_testsets, measures, head_items
+            )
         )
-        out = Parallel(n_jobs=-1)(delayed_list)
-        for key, test_measures, specific_test_time, specific_num_tested in out:
-            if test_measures is None:
-                continue
-            ret_measures[key] = test_measures
-            test_times[key] = specific_test_time
-            num_tested[key] = specific_num_tested
+    out = Parallel(n_jobs=-1)(delayed_list)
+        # out = []
+        # for specific_testset, key in specific_testsets:
+        #     out.append(eval_task(key, algo, start_test, specific_testset, measures, head_items))
+    for key, test_measures, specific_test_time, specific_num_tested in out:
+        if test_measures is None:
+            continue
+        ret_measures[key] = test_measures
+        test_times[key] = specific_test_time
+        num_tested[key] = specific_num_tested
 
     return ret_measures, train_measures, fit_time, test_times, num_tested, crossfold_index
 
