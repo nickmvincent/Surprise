@@ -216,6 +216,7 @@ def cross_validate_many(
     ):
     """ see cross_validate( """
     crossfold_index_to_args = {}
+    tic = time.time()
     
     measures = [m.lower() for m in measures]
     for i in range(cv):
@@ -223,40 +224,59 @@ def cross_validate_many(
     cv = get_cv(cv)
     cv.random_state = 0
     for (
-        identifier, boycott_uid_set
-    ), (
-        identifier2, like_boycott_uid_set
-    ) in zip(
-            boycott_uid_sets.items(), like_boycott_uid_sets.items()
-    ):
-        if verbose:
-            print('Working on identifier: {}'.format(identifier))
-        assert identifier == identifier2
-        for (
-            crossfold_index,
+        crossfold_index, row
+    ) in enumerate(cv.custom_rating_split(data, empty_boycott_data, boycott_uid_sets, like_boycott_uid_sets)):
+        print('{} seconds since last tic (splitting)'.format(time.time() - tic))
+        tic = time.time()
+        for identifier in boycott_uid_sets.keys():
             (
                 trainset, nonboycott_testset, boycott_testset,
                 like_boycott_but_testset, all_like_boycott_testset,
                 all_testset
-            )
-        ) in enumerate(cv.custom_rating_split(data, empty_boycott_data, boycott_uid_set, like_boycott_uid_set)):
-                specific_testsets = {
-                    'all' + '__' + identifier: all_testset, 
-                    'non-boycott' + '__' + identifier: nonboycott_testset,
-                    'boycott' + '__' + identifier: boycott_testset,
-                    'like-boycott' + '__' + identifier: like_boycott_but_testset,
-                    'all-like-boycott' + '__' + identifier: all_like_boycott_testset
-                }
-                if crossfold_index_to_args[crossfold_index]:
-                    crossfold_index_to_args[crossfold_index][2].update(specific_testsets)
-                else:
-                    crossfold_index_to_args[crossfold_index] = [
-                        algo, trainset, specific_testsets, measures, False, crossfold_index
-                    ]
-                assert list(crossfold_index_to_args[crossfold_index][1].all_ratings()) == list(trainset.all_ratings())
+            ) = row[identifier]
+            specific_testsets = {
+                'all' + '__' + identifier: all_testset, 
+                'non-boycott' + '__' + identifier: nonboycott_testset,
+                'boycott' + '__' + identifier: boycott_testset,
+                'like-boycott' + '__' + identifier: like_boycott_but_testset,
+                'all-like-boycott' + '__' + identifier: all_like_boycott_testset
+            }
+            if crossfold_index_to_args[crossfold_index]:
+                crossfold_index_to_args[crossfold_index][2].update(specific_testsets)
+            else:
+                crossfold_index_to_args[crossfold_index] = [
+                    algo, trainset, specific_testsets, measures, False, crossfold_index
+                ]
+            
+            assert list(crossfold_index_to_args[crossfold_index][1].all_ratings()) == list(trainset.all_ratings())
+        # for (
+        #     crossfold_index,
+        #     (
+        #         trainset, nonboycott_testset, boycott_testset,
+        #         like_boycott_but_testset, all_like_boycott_testset,
+        #         all_testset
+        #     )
+        # ) in enumerate(cv.custom_rating_split(data, empty_boycott_data, boycott_uid_set, like_boycott_uid_set)):
+                # specific_testsets = {
+                #     'all' + '__' + identifier: all_testset, 
+                #     'non-boycott' + '__' + identifier: nonboycott_testset,
+                #     'boycott' + '__' + identifier: boycott_testset,
+                #     'like-boycott' + '__' + identifier: like_boycott_but_testset,
+                #     'all-like-boycott' + '__' + identifier: all_like_boycott_testset
+                # }
+                # if crossfold_index_to_args[crossfold_index]:
+                #     crossfold_index_to_args[crossfold_index][2].update(specific_testsets)
+                # else:
+                #     crossfold_index_to_args[crossfold_index] = [
+                #         algo, trainset, specific_testsets, measures, False, crossfold_index
+                #     ]
+                # assert list(crossfold_index_to_args[crossfold_index][1].all_ratings()) == list(trainset.all_ratings())
 
     outputs = []
+    tic = time.time()
     for i in range(len(crossfold_index_to_args)):
+        print('{} seconds since last tic (doing crossfolds)'.format(time.time() - tic))
+        tic = time.time()
         algo, trainset, specific_testsets, measures, return_train_measures, crossfold_index = crossfold_index_to_args[i]
         assert i == crossfold_index
         output = fit_and_score_many(
@@ -357,14 +377,13 @@ def cross_validate_custom(
 
     # build all the args that will be sent out in parallel
     for (
-            crossfold_index,
-            (
-                # flag
-                trainset, nonboycott_testset, boycott_testset,
-                like_boycott_but_testset, all_like_boycott_testset,
-                all_testset
-            )
-    ) in enumerate(cv.custom_rating_split(nonboycott, boycott, boycott_uid_set, like_boycott_uid_set)):
+        crossfold_index, row
+    ) in enumerate(cv.custom_rating_split(nonboycott, boycott, {'only': boycott_uid_set}, {'only': like_boycott_uid_set})):
+        (
+            trainset, nonboycott_testset, boycott_testset,
+            like_boycott_but_testset, all_like_boycott_testset,
+            all_testset
+        ) = row['only']
         args_list += [[
             algo, trainset, {
                 'all': all_testset, 'non-boycott': nonboycott_testset,

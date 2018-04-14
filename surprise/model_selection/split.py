@@ -122,11 +122,12 @@ class KFold():
             yield trainset, testset
 
 
-    def custom_rating_split(self, nonboycott, boycott, boycott_uid_set, like_boycott_uid_set):
+    def custom_rating_split(self, nonboycott, boycott, boycott_uid_sets, like_boycott_uid_sets):
         '''function to iterate over trainsets and testsets.
 
         Args:
-            todo
+            boycott_uid_sets - a dict of identifier keys and set values
+            identifier:set of uids
 
         Returns:
             list of [trainset, nonboycott_testset, boycott_testset, like_boycott_but_testset, all_like_boycott_testset, all_testset]
@@ -160,40 +161,51 @@ class KFold():
 
             raw_trainset = [nonboycott.raw_ratings[i] for i in chain(indices[:start],
                                                                indices[stop:])]
+
             nonboycott_ratings_for_test = [nonboycott.raw_ratings[i] for i in indices[start:stop]]
 
-            boycott_testratings = []
-            nonboycott_testratings = []
-            # full name: like-boycotting-users-but-not-boycotting
-            like_boycott_but_testratings = []            
-            for rating_row in nonboycott_ratings_for_test:
-                uid = rating_row[0]
-                if uid in boycott_uid_set:
+            row = {}           
+            for (
+                identifier, boycott_uid_set
+            ), (
+                identifier2, like_boycott_uid_set
+            ) in zip(
+                    boycott_uid_sets.items(), like_boycott_uid_sets.items()
+            ):
+                assert identifier == identifier2
+                boycott_testratings = []
+                nonboycott_testratings = []
+                # full name: like-boycotting-users-but-not-boycotting
+                like_boycott_but_testratings = []            
+                for rating_row in nonboycott_ratings_for_test:
+                    uid = rating_row[0]
+                    if uid in boycott_uid_set:
+                        boycott_testratings.append(rating_row)
+                    else:
+                        nonboycott_testratings.append(rating_row)
+                        if uid in like_boycott_uid_set:
+                            like_boycott_but_testratings.append(rating_row)
+
+                for rating_row in [
+                    boycott.raw_ratings[i] for i in boycott_indices[boycott_start:boycott_stop]
+                ]:
                     boycott_testratings.append(rating_row)
-                else:
-                    nonboycott_testratings.append(rating_row)
-                    if uid in like_boycott_uid_set:
-                        like_boycott_but_testratings.append(rating_row)
+            
+                all_like_boycott_testratings = boycott_testratings + like_boycott_but_testratings
+                all_testratings = boycott_testratings + nonboycott_testratings
 
-            for rating_row in [
-                boycott.raw_ratings[i] for i in boycott_indices[boycott_start:boycott_stop]
-            ]:
-                boycott_testratings.append(rating_row)
-        
-            all_like_boycott_testratings = boycott_testratings + like_boycott_but_testratings
-            all_testratings = boycott_testratings + nonboycott_testratings
+                # nonboycott is a Data() object with the construct_trainset methods
+                # whether we call nonboycott.construct_ or boycott.construct_ is arbitrary
+                trainset = nonboycott.construct_trainset(raw_trainset)
 
-            # nonboycott is a Data() object with the construct_trainset methods
-            # whether we call nonboycott.construct_ or boycott.construct_ is arbitrary
-            trainset = nonboycott.construct_trainset(raw_trainset)
+                nonboycott_testset = nonboycott.construct_testset(nonboycott_testratings)
+                boycott_testset = nonboycott.construct_testset(boycott_testratings)
+                like_boycott_but_testset = nonboycott.construct_testset(like_boycott_but_testratings)
+                all_like_boycott_testset = nonboycott.construct_testset(all_like_boycott_testratings)
+                all_testset = nonboycott.construct_testset(all_testratings)
 
-            nonboycott_testset = nonboycott.construct_testset(nonboycott_testratings)
-            boycott_testset = nonboycott.construct_testset(boycott_testratings)
-            like_boycott_but_testset = nonboycott.construct_testset(like_boycott_but_testratings)
-            all_like_boycott_testset = nonboycott.construct_testset(all_like_boycott_testratings)
-            all_testset = nonboycott.construct_testset(all_testratings)
-
-            ret.append([trainset, nonboycott_testset, boycott_testset, like_boycott_but_testset, all_like_boycott_testset, all_testset])
+                row[identifier] = [trainset, nonboycott_testset, boycott_testset, like_boycott_but_testset, all_like_boycott_testset, all_testset]
+            ret.append(row)
         return ret 
 
     def custom_user_split_fraction(self, data, all_user_ids, out_user_ids):
