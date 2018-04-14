@@ -208,8 +208,6 @@ def merge_scores(fit_and_score_outputs):
     return dict(merged_ret)
 
 
-# boycott_uid_sets should really be a dict
-# need some identying information about each uid_set
 def cross_validate_many(
         algo, data, empty_boycott_data, boycott_uid_sets, like_boycott_uid_sets, measures=None, cv=5,
         n_jobs=-1, pre_dispatch='2*n_jobs', verbose=False, head_items=None
@@ -228,17 +226,16 @@ def cross_validate_many(
         for identifier in boycott_uid_sets.keys():
             (
                 trainset, nonboycott_testset, boycott_testset,
-                _, # like_boycott_but_testset, 
-                _, # all_like_boycott_testset,
+                like_boycott_but_testset, 
+                all_like_boycott_testset,
                 all_testset
             ) = row[identifier]
             specific_testsets = {
                 'all' + '__' + identifier: all_testset, 
                 'non-boycott' + '__' + identifier: nonboycott_testset,
                 'boycott' + '__' + identifier: boycott_testset,
-                # since these are only used for actually boycott conditions, we could skip for now to save time...
-                # 'like-boycott' + '__' + identifier: like_boycott_but_testset,
-                # 'all-like-boycott' + '__' + identifier: all_like_boycott_testset
+                'like-boycott' + '__' + identifier: like_boycott_but_testset,
+                'all-like-boycott' + '__' + identifier: all_like_boycott_testset
             }
             if crossfold_index_to_args[crossfold_index]:
                 crossfold_index_to_args[crossfold_index][2].update(specific_testsets)
@@ -250,7 +247,6 @@ def cross_validate_many(
     outputs = []
     for i in range(len(crossfold_index_to_args)):
         algo, trainset, specific_testsets, measures, return_train_measures, crossfold_index = crossfold_index_to_args[i]
-        assert i == crossfold_index
         # specific_testsets - what does this like right here?
         # one key per sourcefile/id and evaluation group
         # e.g. all__SOMEFILE_0001
@@ -400,7 +396,8 @@ def eval_task(algo, start_test, specific_testsets, measures, head_items):
         tic = time.time()
         predictions = algo.test(specific_testset)
         if not predictions:
-            return key, {}, 0, 0
+            ret.append([key, {}, 0, 0])
+            continue
         test_time = time.time() - tic
         test_measures = {}
         for m in measures:
@@ -447,16 +444,21 @@ def fit_and_score_many(
         specific_testsets = {}
         for key in key_batch:
             specific_testsets[key] = testset[key]
-        delayed_list.append(
-            delayed(eval_task)(
-                algo, start_test, specific_testsets, measures, head_items
-            )
-        )
-    out = Parallel(n_jobs=-1)(delayed_list)
+        delayed_list += [delayed(eval_task)(
+            algo, start_test, specific_testsets, measures, head_items  
+        )]
+    out = Parallel(n_jobs=-1)(tuple(delayed_list))
         # out = []
         # for specific_testset, key in specific_testsets:
         #     out.append(eval_task(key, algo, start_test, specific_testset, measures, head_items))
-    for key, test_measures, specific_test_time, specific_num_tested in out:
+    
+    # flatten
+    rows = []
+    for chunk in out:
+        for row in chunk:
+            rows.append(row)
+    
+    for key, test_measures, specific_test_time, specific_num_tested in rows:
         if test_measures is None:
             continue
         ret_measures[key] = test_measures
