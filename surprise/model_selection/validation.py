@@ -418,6 +418,7 @@ def eval_task(key, algo, start_test, specific_testset, measures, head_items):
     Evaluate on a specific testset.
     This function exists to make evaluation easier to parallelize.
     """
+    tic = time.time()
     predictions = algo.test(specific_testset)
     if not predictions:
         return key, {}, 0, 0
@@ -437,6 +438,7 @@ def eval_task(key, algo, start_test, specific_testset, measures, head_items):
                 test_measures['tail' + sub_measure] = tail_mean_val
         else:
             test_measures[m] = result
+    print('1 eval task takes {}'.format(time.time() - tic))
     return key, test_measures, test_time, len(specific_testset)
 
 
@@ -477,7 +479,7 @@ def fit_and_score_many(
                 key, algo, start_test, specific_testset, measures, head_items
             ) for specific_testset, key in specific_testsets
         )
-        out = Parallel(n_jobs=-1)(delayed_list)
+        out = Parallel(n_jobs=-1, max_nbytes=1e6)(delayed_list)
         for key, test_measures, specific_test_time, specific_num_tested in out:
             if test_measures is None:
                 continue
