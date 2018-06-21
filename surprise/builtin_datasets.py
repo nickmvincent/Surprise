@@ -53,7 +53,7 @@ BUILTIN_DATASETS = {
             url='http://files.grouplens.org/datasets/movielens/ml-20m.zip',
             path=join(get_dataset_dir(), 'ml-20m/ml-20m/ratings.csv'),
             reader_params=dict(line_format='user item rating timestamp',
-                               rating_scale=(1, 5),
+                               rating_scale=(0.5, 5.0),
                                sep=',')
         ),
     'jester':
