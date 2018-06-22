@@ -14,6 +14,8 @@ from joblib import delayed
 from six import iteritems
 
 from .split import get_cv
+from model_selection.split import KFold
+
 from .. import accuracy
 
 
@@ -265,7 +267,7 @@ def cross_validate_many(
 def cross_validate_custom(
         algo, nonboycott, boycott, boycott_uid_set, like_boycott_uid_set, measures=None, cv=5,
         return_train_measures=False, n_jobs=-1,
-        pre_dispatch='2*n_jobs', verbose=False, head_items=None):
+        pre_dispatch='2*n_jobs', verbose=False, head_items=None, predictions_path=None):
     '''
     Run a cross validation procedure for a given algorithm, reporting accuracy
     measures and computation times.
@@ -340,7 +342,8 @@ def cross_validate_custom(
 
     '''
     measures = [m.lower() for m in measures]
-    cv = get_cv(cv)
+
+    cv = KFold(cv, random_state=0)
     args_list = []
 
     # number the crossfolds so we can keep track of them when/if they go out to threads
@@ -366,7 +369,7 @@ def cross_validate_custom(
         ]]
     delayed_list = (
         delayed(fit_and_score)(
-            algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items
+            algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items, predictions_path
         ) for algo, trainset, testsets, measures, return_train_measures, crossfold_index in args_list
     )
     out = Parallel(n_jobs=n_jobs, pre_dispatch=pre_dispatch)(delayed_list)
@@ -472,7 +475,7 @@ def fit_and_score_many(
 
 def fit_and_score(
         algo, trainset, testset, measures,
-        return_train_measures=False, crossfold_index=None, head_items=None,
+        return_train_measures=False, crossfold_index=None, head_items=None, predictions_path=None
     ):
     '''Helper method that trains an algorithm and compute accuracy measures on
     a testset. Also report train and test times.
@@ -523,6 +526,10 @@ def fit_and_score(
             if not predictions:
                 continue
             test_time = time.time() - start_test
+            if predictions_path:
+                with open('{}/fold{}_seed0_predictions'.format(predictions_path, crossfold_index), 'w') as file_handler:
+                    for prediction in predictions:
+                        file_handler.write("{}\n".format(prediction))
             test_measures = {}
             for m in measures:
                 eval_func = getattr(accuracy, m.lower())
