@@ -13,8 +13,7 @@ from joblib import Parallel
 from joblib import delayed
 from six import iteritems
 
-from .split import get_cv
-from model_selection.split import KFold
+from .split import get_cv, KFold
 
 from .. import accuracy
 
@@ -214,7 +213,11 @@ def cross_validate_many(
         algo, data, empty_boycott_data, boycott_uid_sets, like_boycott_uid_sets, measures=None, cv=5,
         n_jobs=-1, pre_dispatch='2*n_jobs', verbose=False, head_items=None
     ):
-    """ see cross_validate( """
+    """
+    see cross_validate
+
+    TODO: what's the difference here? Why would somebody use this one?
+    """
     crossfold_index_to_args = {}
     
     measures = [m.lower() for m in measures]
@@ -267,7 +270,7 @@ def cross_validate_many(
 def cross_validate_custom(
         algo, nonboycott, boycott, boycott_uid_set, like_boycott_uid_set, measures=None, cv=5,
         return_train_measures=False, n_jobs=-1,
-        pre_dispatch='2*n_jobs', verbose=False, head_items=None, predictions_path=None):
+        pre_dispatch='2*n_jobs', verbose=False, head_items=None, save_path=None, load_path=None):
     '''
     Run a cross validation procedure for a given algorithm, reporting accuracy
     measures and computation times.
@@ -369,7 +372,7 @@ def cross_validate_custom(
         ]]
     delayed_list = (
         delayed(fit_and_score)(
-            algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items, predictions_path
+            algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items, save_path
         ) for algo, trainset, testsets, measures, return_train_measures, crossfold_index in args_list
     )
     out = Parallel(n_jobs=n_jobs, pre_dispatch=pre_dispatch)(delayed_list)
@@ -475,7 +478,7 @@ def fit_and_score_many(
 
 def fit_and_score(
         algo, trainset, testset, measures,
-        return_train_measures=False, crossfold_index=None, head_items=None, predictions_path=None
+        return_train_measures=False, crossfold_index=None, head_items=None, save_path=None, load_path=None
     ):
     '''Helper method that trains an algorithm and compute accuracy measures on
     a testset. Also report train and test times.
@@ -508,7 +511,8 @@ def fit_and_score(
             - The testing time in seconds.
     '''
     start_fit = time.time()
-    algo.fit(trainset)
+    if load_path is None: # then we can't load predictions!
+        algo.fit(trainset)
     fit_time = time.time() - start_fit
     start_test = time.time()
 
@@ -522,14 +526,20 @@ def fit_and_score(
         # key is the testgroup (non-boycott, boycott, etc)
         # val is the list of ratings
         for key, specific_testset in testset.items():
-            predictions = algo.test(specific_testset)
-            if not predictions:
-                continue
+            if load_path:
+                content = ['[' + x.strip('\n') + ']' for x in file_handler.readlines()]
+                assert(content[0] == '[uid,iid,r_ui,est,details,crossfold_index]')
+                predictions = [Prediction(*ast.literal_eval(line)[:-1]) for line in content[1:]]
+            else:
+                predictions = algo.test(specific_testset)
+                if not predictions:
+                    continue
             test_time = time.time() - start_test
-            if predictions_path:
-                with open('{}/fold{}_seed0_predictions'.format(predictions_path, crossfold_index), 'w') as file_handler:
+            if save_path:
+                with open('{}_seed0_fold{}_predictions.txt'.format(save_path, crossfold_index), 'w') as file_handler:
+                    file_handler.write('uid,iid,r_ui,est,details,crossfold_index\n')
                     for prediction in predictions:
-                        file_handler.write("{}\n".format(prediction))
+                        file_handler.write(','.join([str(x) for x in prediction] + [str(crossfold_index)]) + '\n')
             test_measures = {}
             for m in measures:
                 eval_func = getattr(accuracy, m.lower())
