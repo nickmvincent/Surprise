@@ -7,6 +7,7 @@ import time
 from pprint import pprint
 from collections import defaultdict
 from pprint import pprint
+import ast
 
 import numpy as np
 from joblib import Parallel
@@ -16,6 +17,8 @@ from six import iteritems
 from .split import get_cv, KFold
 
 from .. import accuracy
+
+from surprise.prediction_algorithms.predictions import Prediction
 
 
 def cross_validate(algo, data, measures=['rmse', 'mae'], cv=None,
@@ -211,10 +214,14 @@ def merge_scores(fit_and_score_outputs):
 
 def cross_validate_many(
         algo, data, empty_boycott_data, boycott_uid_sets, like_boycott_uid_sets, measures=None, cv=5,
-        n_jobs=-1, pre_dispatch='2*n_jobs', verbose=False, head_items=None
+        n_jobs=-1, pre_dispatch='2*n_jobs', verbose=False, head_items=None,
+        load_path=None
     ):
     """
     see cross_validate
+
+    Does not return train measures currently.
+    Does not support saving results  - why not?
 
     TODO: what's the difference here? Why would somebody use this one?
     """
@@ -223,8 +230,7 @@ def cross_validate_many(
     measures = [m.lower() for m in measures]
     for i in range(cv):
         crossfold_index_to_args[i] = []
-    cv = get_cv(cv)
-    cv.random_state = 0
+    cv = KFold(cv, random_state=0)
     for (
         crossfold_index, row
     ) in enumerate(cv.custom_rating_split(data, empty_boycott_data, boycott_uid_sets, like_boycott_uid_sets)):
@@ -256,7 +262,7 @@ def cross_validate_many(
         # one key per sourcefile/id and evaluation group
         # e.g. all__SOMEFILE_0001
         output = fit_and_score_many(
-            algo, trainset, specific_testsets, measures, return_train_measures, crossfold_index, head_items
+            algo, trainset, specific_testsets, measures, return_train_measures, crossfold_index, head_items, load_path
         )
         outputs.append(output)
 
@@ -390,17 +396,35 @@ def batch(iterable, batch_size=1):
         yield iterable[ndx:min(ndx + batch_size, num_items)]
 
 
-def eval_task(algo, start_test, specific_testsets, measures, head_items):
+def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, save_path=None, load_path=None):
     """
     Evaluate on a specific testset.
     This function exists to make evaluation easier to parallelize.
     """
     ret = []
-    count = 0
     for key, specific_testset in specific_testsets.items():
-        count += 1
         tic = time.time()
-        predictions = algo.test(specific_testset)
+        if load_path:
+            print('loading:', load_path)
+            load_from = '{}_seed0_fold{}_predictions.txt'.format(load_path, crossfold_index)
+            print(load_from)
+            with open(load_from, 'r') as file_handler:
+                content = ['[' + x.strip('\n') + ']' for x in file_handler.readlines()]
+                assert(content[0] == '[uid,iid,r_ui,est,details,crossfold_index]')
+                predictions = [Prediction(*ast.literal_eval(line)[:-1]) for line in content[1:]]
+        else:
+            predictions = algo.test(specific_testset)
+            if not predictions:
+                continue
+        
+        #predictions = algo.test(specific_testset)
+
+        if save_path:
+            with open('{}_seed0_fold{}_predictions.txt'.format(save_path, crossfold_index), 'w') as file_handler:
+                file_handler.write('uid,iid,r_ui,est,details,crossfold_index\n')
+                for prediction in predictions:
+                    file_handler.write(','.join([str(x) for x in prediction] + [str(crossfold_index)]) + '\n')
+
         if not predictions:
             ret.append([key, {}, 0, 0])
             continue
@@ -427,12 +451,21 @@ def eval_task(algo, start_test, specific_testsets, measures, head_items):
 def fit_and_score_many(
         algo, trainset, testset, measures,
         return_train_measures=False, crossfold_index=None, head_items=None,
+        load_path=None
     ):
-    """see fit and score"""
+    """
+    see fit and score
+    
+    How is this different?
+    Does not currently support saving...
+
+    There is some repeated code from fit_and_score(...)
+    Consider a refactor.
+    """
     start_fit = time.time()
-    algo.fit(trainset)
+    if load_path is None:
+        algo.fit(trainset)
     fit_time = time.time() - start_fit
-    start_test = time.time()
 
     test_times = {}
     num_tested = {}
@@ -444,19 +477,16 @@ def fit_and_score_many(
     # key is the testgroup (non-boycott, boycott, etc)
     # val is the list of ratings
     keys = list(testset.keys())
-    batchsize = 10
+    batchsize = 10 # TODO: why batch ten at once?
     delayed_list = []
     for _, key_batch in enumerate(batch(keys, batchsize)):
         specific_testsets = {}
         for key in key_batch:
             specific_testsets[key] = testset[key]
         delayed_list += [delayed(eval_task)(
-            algo, start_test, specific_testsets, measures, head_items  
+            algo, specific_testsets, measures, head_items, crossfold_index, load_path=load_path
         )]
     out = Parallel(n_jobs=-1)(tuple(delayed_list))
-        # out = []
-        # for specific_testset, key in specific_testsets:
-        #     out.append(eval_task(key, algo, start_test, specific_testset, measures, head_items))
     
     # flatten
     rows = []
@@ -525,41 +555,14 @@ def fit_and_score(
     if isinstance(testset, dict):
         # key is the testgroup (non-boycott, boycott, etc)
         # val is the list of ratings
-        for key, specific_testset in testset.items():
-            if load_path:
-                content = ['[' + x.strip('\n') + ']' for x in file_handler.readlines()]
-                assert(content[0] == '[uid,iid,r_ui,est,details,crossfold_index]')
-                predictions = [Prediction(*ast.literal_eval(line)[:-1]) for line in content[1:]]
-            else:
-                predictions = algo.test(specific_testset)
-                if not predictions:
-                    continue
-            test_time = time.time() - start_test
-            if save_path:
-                with open('{}_seed0_fold{}_predictions.txt'.format(save_path, crossfold_index), 'w') as file_handler:
-                    file_handler.write('uid,iid,r_ui,est,details,crossfold_index\n')
-                    for prediction in predictions:
-                        file_handler.write(','.join([str(x) for x in prediction] + [str(crossfold_index)]) + '\n')
-            test_measures = {}
-            for m in measures:
-                eval_func = getattr(accuracy, m.lower())
-                if 'ndcg' in m:
-                    result = eval_func(predictions, verbose=0)
-                    tail_result = eval_func(predictions, verbose=0, head_items=head_items)
-                    sub_measures = m.split('_')
-                    for i_sm, sub_measure in enumerate(sub_measures):
-                        mean_val, frac_of_users = result[i_sm]
-                        tail_mean_val, _ = tail_result[i_sm]
-                        test_measures[sub_measure] = mean_val
-                        test_measures[sub_measure + '_frac'] = frac_of_users
-                        test_measures['tail' + sub_measure] = tail_mean_val
-                else:
-                    test_measures[m] = eval_func(predictions, verbose=0)
+        results = eval_task(algo, testset, measures, head_items, crossfold_index, save_path=save_path, load_path=load_path)
+        for (key, test_measures, test_time, num_tested_) in results:
             ret_measures[key] = test_measures
             test_times[key] = test_time
-            num_tested[key] = len(specific_testset)
+            num_tested[key] = num_tested_
 
-    # backward compatability
+    # backward compatability - typically testset is a list not a dict.
+    # this is because typically there's just one testset, not multiple.
     else:
         predictions = algo.test(testset)
         test_time = time.time() - start_test                
