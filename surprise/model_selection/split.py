@@ -126,8 +126,13 @@ class KFold():
         '''function to iterate over trainsets and testsets.
 
         Args:
-            boycott_uid_sets - a dict of identifier keys and set values
-            identifier:set of uids
+            nonboycott - the nonboycott ratigns
+            boycott - the boycott ratings
+            boycott_uid_sets - a dict of identifier keys and set values (uids)
+            like_boycott_uid_sets - a dict of identifier keys and set values (uids)
+
+        You can pass many boycott uid sets at once
+
 
         Returns:
             list of [trainset, nonboycott_testset, boycott_testset, like_boycott_but_testset, all_like_boycott_testset, all_testset]
@@ -141,7 +146,7 @@ class KFold():
         # We use indices to avoid shuffling the original data.raw_ratings list.
         indices = np.arange(len(nonboycott.raw_ratings))
         boycott_indices = np.arange(len(boycott.raw_ratings))
-        ret = []
+        #ret = []
 
         if self.shuffle:
             get_rng(self.random_state).shuffle(indices)
@@ -211,8 +216,9 @@ class KFold():
                 all_testset = nonboycott.construct_testset(all_testratings)
 
                 row[identifier] = [trainset, nonboycott_testset, boycott_testset, like_boycott_but_testset, all_like_boycott_testset, all_testset]
-            ret.append(row)
-        return ret 
+            yield row
+        #     ret.append(row)
+        # return ret 
 
     def custom_user_split_fraction(self, data, all_user_ids, out_user_ids):
         '''Generator function to iterate over trainsets and testsets.

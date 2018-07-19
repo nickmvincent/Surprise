@@ -355,33 +355,56 @@ def cross_validate_custom(
     cv = KFold(cv, random_state=0)
     args_list = []
 
+
+    # IF we're going to parallelize to the folds do this
     # number the crossfolds so we can keep track of them when/if they go out to threads
     # note that if you're threading at the experiment level this code doesn't do much b/c n_jobs will be set to 1.
-
     # build all the args that will be sent out in parallel
-    for (
-        crossfold_index, row
-    ) in enumerate(cv.custom_rating_split(nonboycott, boycott, {'only': boycott_uid_set}, {'only': like_boycott_uid_set})):
-        (
-            trainset, nonboycott_testset, boycott_testset,
-            like_boycott_but_testset, all_like_boycott_testset,
-            all_testset
-        ) = row['only']
-        args_list += [[
-            algo, trainset, {
-                'all': all_testset, 'non-boycott': nonboycott_testset,
-                'boycott': boycott_testset, 'like-boycott': like_boycott_but_testset,
-                'all-like-boycott': all_like_boycott_testset
-            },
-            measures,
-            return_train_measures, crossfold_index
-        ]]
-    delayed_list = (
-        delayed(fit_and_score)(
-            algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items, save_path
-        ) for algo, trainset, testsets, measures, return_train_measures, crossfold_index in args_list
-    )
-    out = Parallel(n_jobs=n_jobs, pre_dispatch=pre_dispatch)(delayed_list)
+    if n_jobs != 1:
+        for (
+            crossfold_index, row
+        ) in enumerate(cv.custom_rating_split(nonboycott, boycott, {'only': boycott_uid_set}, {'only': like_boycott_uid_set})):
+            (
+                trainset, nonboycott_testset, boycott_testset,
+                like_boycott_but_testset, all_like_boycott_testset,
+                all_testset
+            ) = row['only']
+            args_list += [[
+                algo, trainset, {
+                    'all': all_testset, 'non-boycott': nonboycott_testset,
+                    'boycott': boycott_testset, 'like-boycott': like_boycott_but_testset,
+                    'all-like-boycott': all_like_boycott_testset
+                },
+                measures,
+                return_train_measures, crossfold_index
+            ]]
+        delayed_gen = (
+            delayed(fit_and_score)(
+                algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items, save_path
+            ) for algo, trainset, testsets, measures, return_train_measures, crossfold_index in args_list
+        )
+        out = Parallel(n_jobs=n_jobs, pre_dispatch=pre_dispatch)(delayed_gen)
+    # But if we're not parallelizing folds (probably because we parallelized at the experiment level)
+    # just do everthing in series so we don't use 5x memory for no reason
+    else:
+        out = []
+        for (
+            crossfold_index, row
+        ) in enumerate(cv.custom_rating_split(nonboycott, boycott, {'only': boycott_uid_set}, {'only': like_boycott_uid_set})):
+            (
+                trainset, nonboycott_testset, boycott_testset,
+                like_boycott_but_testset, all_like_boycott_testset,
+                all_testset
+            ) = row['only']
+            testsets =  {
+                    'all': all_testset, 'non-boycott': nonboycott_testset,
+                    'boycott': boycott_testset, 'like-boycott': like_boycott_but_testset,
+                    'all-like-boycott': all_like_boycott_testset
+            }
+            out += [fit_and_score(
+                algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items, save_path
+            )]
+
     ret = merge_scores(out)
     if verbose:
         print(ret)
@@ -396,42 +419,39 @@ def batch(iterable, batch_size=1):
         yield iterable[ndx:min(ndx + batch_size, num_items)]
 
 
-def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, save_path=None, load_path=None, test_mode=True):
+def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, save_path=None, load_path=None, test_mode=False):
     """
-    Evaluate on a specific testset.
-    This function exists to make evaluation easier to parallelize.
+    Evaluate on specific testsets.
+    This function exists to make testset evaluation easier to parallelize.
     """
     ret = []
     if load_path:
-        print('loading:', load_path)
-        load_from = '{}_seed0_fold{}_{}_predictions.txt'.format(load_path, crossfold_index, key)
-        print(load_from)
+        load_from = '{}_seed0_fold{}_{}_predictions.txt'.format(load_path, crossfold_index, 'all')
+        print('load_from', load_from)
         with open(load_from, 'r') as file_handler:
             content = ['[' + x.strip('\n') + ']' for x in file_handler.readlines()]
             assert(content[0] == '[uid,iid,r_ui,est,details,crossfold_index]')
             all_predictions = [Prediction(*ast.literal_eval(line)[:-1]) for line in content[1:]]
             uid_plus_iid_to_row = {}
             for prediction in all_predictions:
-                key = str(prediction[0]) + str(prediction[1])
-                uid_plus_iid_to_row[key] = prediction
+                uid_plus_iid = str(prediction[0]) + '_' + str(prediction[1])
+                uid_plus_iid_to_row[uid_plus_iid] = prediction
     for key, specific_testset in specific_testsets.items():
         tic = time.time()
         if load_path:
             predictions = []
             for prediction in specific_testset:
-                key = str(prediction[0]) + str(prediction[1])
-                predictions.append(uid_plus_iid_to_row[key])
+                uid_plus_iid = str(prediction[0]) + '_' + str(prediction[1])
+                predictions.append(uid_plus_iid_to_row[uid_plus_iid])
             
             if test_mode:
                 print('Testing')
                 computed = algo.test(specific_testset)
-                print(predictions[:5])
-                print(computed[:5])
+                print('loaded\n', predictions[:3])
+                print('computed\n', computed[:3])
                 assert predictions == computed
         else:
             predictions = algo.test(specific_testset)
-            if not predictions:
-                continue
 
         if save_path and load_path is None: # if you just loaded the predictions, don't save them again, waste of time...
             with open('{}_seed0_fold{}_{}_predictions.txt'.format(save_path, crossfold_index, key), 'w') as file_handler:
@@ -465,7 +485,7 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
 def fit_and_score_many(
         algo, trainset, testset, measures,
         return_train_measures=False, crossfold_index=None, head_items=None,
-        load_path=None
+        load_path=None, test_mode=True
     ):
     """
     see fit and score
@@ -477,7 +497,7 @@ def fit_and_score_many(
     Consider a refactor.
     """
     start_fit = time.time()
-    if load_path is None:
+    if load_path is None or test_mode:
         algo.fit(trainset)
     fit_time = time.time() - start_fit
 
@@ -491,16 +511,32 @@ def fit_and_score_many(
     # key is the testgroup (non-boycott, boycott, etc)
     # val is the list of ratings
     keys = list(testset.keys())
-    batchsize = 10 # TODO: why batch ten at once?
+    print('keys', keys)
     delayed_list = []
-    for _, key_batch in enumerate(batch(keys, batchsize)):
-        specific_testsets = {}
-        for key in key_batch:
-            specific_testsets[key] = testset[key]
-        delayed_list += [delayed(eval_task)(
-            algo, specific_testsets, measures, head_items, crossfold_index, load_path=load_path
-        )]
-    out = Parallel(n_jobs=-1)(tuple(delayed_list))
+
+    if load_path is None:
+        batchsize = 100 # TODO: why batch this many?
+        for _, key_batch in enumerate(batch(keys, batchsize)):
+            specific_testsets = {}
+            for key in key_batch:
+                print('key in fit_and_score_many', key)
+                specific_testsets[key] = testset[key]
+            delayed_list += [delayed(eval_task)(
+                algo, specific_testsets, measures, head_items, crossfold_index, load_path=load_path, test_mode=test_mode
+            )]
+    else:
+        for key in keys:
+
+            specific_testsets = {}
+            for key in key_batch:
+                print('key in fit_and_score_many', key)
+                specific_testsets[key] = testset[key]
+            delayed_list += [delayed(eval_task)(
+                algo, specific_testsets, measures, head_items, crossfold_index, load_path=load_path, test_mode=test_mode
+            )]
+
+
+    out = Parallel(n_jobs=-1)((x for x in delayed_list))
     
     # flatten
     rows = []
