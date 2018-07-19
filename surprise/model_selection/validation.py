@@ -485,7 +485,7 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
 def fit_and_score_many(
         algo, trainset, testset, measures,
         return_train_measures=False, crossfold_index=None, head_items=None,
-        load_path=None, test_mode=True
+        load_path=None, test_mode=False
     ):
     """
     see fit and score
