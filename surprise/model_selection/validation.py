@@ -426,7 +426,7 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
     """
     ret = []
     if load_path:
-        load_from = '{}_seed0_fold{}_{}_predictions.txt'.format(load_path, crossfold_index, 'all')
+        load_from = '{}_seed0_fold{}_predictions.txt'.format(load_path, crossfold_index)
         print('load_from', load_from)
         with open(load_from, 'r') as file_handler:
             content = ['[' + x.strip('\n') + ']' for x in file_handler.readlines()]
@@ -511,7 +511,6 @@ def fit_and_score_many(
     # key is the testgroup (non-boycott, boycott, etc)
     # val is the list of ratings
     keys = list(testset.keys())
-    print('keys', keys)
     delayed_list = []
 
     batchsize = 100 # TODO: why batch this many?
