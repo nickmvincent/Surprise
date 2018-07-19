@@ -514,26 +514,15 @@ def fit_and_score_many(
     print('keys', keys)
     delayed_list = []
 
-    if load_path is None:
-        batchsize = 100 # TODO: why batch this many?
-        for _, key_batch in enumerate(batch(keys, batchsize)):
-            specific_testsets = {}
-            for key in key_batch:
-                print('key in fit_and_score_many', key)
-                specific_testsets[key] = testset[key]
-            delayed_list += [delayed(eval_task)(
-                algo, specific_testsets, measures, head_items, crossfold_index, load_path=load_path, test_mode=test_mode
-            )]
-    else:
-        for key in keys:
-
-            specific_testsets = {}
-            for key in key_batch:
-                print('key in fit_and_score_many', key)
-                specific_testsets[key] = testset[key]
-            delayed_list += [delayed(eval_task)(
-                algo, specific_testsets, measures, head_items, crossfold_index, load_path=load_path, test_mode=test_mode
-            )]
+    batchsize = 100 # TODO: why batch this many?
+    for _, key_batch in enumerate(batch(keys, batchsize)):
+        specific_testsets = {}
+        for key in key_batch:
+            print('key in fit_and_score_many', key)
+            specific_testsets[key] = testset[key]
+        delayed_list += [delayed(eval_task)(
+            algo, specific_testsets, measures, head_items, crossfold_index, load_path=load_path, test_mode=test_mode
+        )]
 
 
     out = Parallel(n_jobs=-1)((x for x in delayed_list))
