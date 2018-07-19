@@ -41,6 +41,7 @@ from .reader import Reader
 from .builtin_datasets import download_builtin_dataset
 from .builtin_datasets import BUILTIN_DATASETS
 from .trainset import Trainset
+import numpy as np
 
 
 class Dataset:
@@ -285,9 +286,9 @@ class DatasetAutoFolds(Dataset):
             self.raw_ratings = self.read_ratings(self.ratings_file)
         elif df is not None:
             #self.df = df
-            self.raw_ratings = [(uid, iid, float(r) + self.reader.offset, None)
+            self.raw_ratings = np.array([np.array((uid, iid, float(r) + self.reader.offset, None))
                                 for (uid, iid, r) in
-                                df.itertuples(index=False)]
+                                df.itertuples(index=False)])
         else:
             raise ValueError('Must specify ratings file or dataframe.')
 

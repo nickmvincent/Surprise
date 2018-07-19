@@ -396,31 +396,45 @@ def batch(iterable, batch_size=1):
         yield iterable[ndx:min(ndx + batch_size, num_items)]
 
 
-def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, save_path=None, load_path=None):
+def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, save_path=None, load_path=None, test_mode=True):
     """
     Evaluate on a specific testset.
     This function exists to make evaluation easier to parallelize.
     """
     ret = []
+    if load_path:
+        print('loading:', load_path)
+        load_from = '{}_seed0_fold{}_{}_predictions.txt'.format(load_path, crossfold_index, key)
+        print(load_from)
+        with open(load_from, 'r') as file_handler:
+            content = ['[' + x.strip('\n') + ']' for x in file_handler.readlines()]
+            assert(content[0] == '[uid,iid,r_ui,est,details,crossfold_index]')
+            all_predictions = [Prediction(*ast.literal_eval(line)[:-1]) for line in content[1:]]
+            uid_plus_iid_to_row = {}
+            for prediction in all_predictions:
+                key = str(prediction[0]) + str(prediction[1])
+                uid_plus_iid_to_row[key] = prediction
     for key, specific_testset in specific_testsets.items():
         tic = time.time()
         if load_path:
-            print('loading:', load_path)
-            load_from = '{}_seed0_fold{}_predictions.txt'.format(load_path, crossfold_index)
-            print(load_from)
-            with open(load_from, 'r') as file_handler:
-                content = ['[' + x.strip('\n') + ']' for x in file_handler.readlines()]
-                assert(content[0] == '[uid,iid,r_ui,est,details,crossfold_index]')
-                predictions = [Prediction(*ast.literal_eval(line)[:-1]) for line in content[1:]]
+            predictions = []
+            for prediction in specific_testset:
+                key = str(prediction[0]) + str(prediction[1])
+                predictions.append(uid_plus_iid_to_row[key])
+            
+            if test_mode:
+                print('Testing')
+                computed = algo.test(specific_testset)
+                print(predictions[:5])
+                print(computed[:5])
+                assert predictions == computed
         else:
             predictions = algo.test(specific_testset)
             if not predictions:
                 continue
-        
-        #predictions = algo.test(specific_testset)
 
-        if save_path:
-            with open('{}_seed0_fold{}_predictions.txt'.format(save_path, crossfold_index), 'w') as file_handler:
+        if save_path and load_path is None: # if you just loaded the predictions, don't save them again, waste of time...
+            with open('{}_seed0_fold{}_{}_predictions.txt'.format(save_path, crossfold_index, key), 'w') as file_handler:
                 file_handler.write('uid,iid,r_ui,est,details,crossfold_index\n')
                 for prediction in predictions:
                     file_handler.write(','.join([str(x) for x in prediction] + [str(crossfold_index)]) + '\n')
@@ -561,7 +575,7 @@ def fit_and_score(
             test_times[key] = test_time
             num_tested[key] = num_tested_
 
-    # backward compatability - typically testset is a list not a dict.
+    # backward compatability - in the original version testset is a list not a dict.
     # this is because typically there's just one testset, not multiple.
     else:
         predictions = algo.test(testset)
