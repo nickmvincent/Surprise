@@ -8,6 +8,7 @@ from pprint import pprint
 from collections import defaultdict
 from pprint import pprint
 import ast
+import psutil
 
 import numpy as np
 from joblib import Parallel
@@ -387,10 +388,12 @@ def cross_validate_custom(
     # But if we're not parallelizing folds (probably because we parallelized at the experiment level)
     # just do everthing in series so we don't use 5x memory for no reason
     else:
+        
         out = []
         for (
             crossfold_index, row
         ) in enumerate(cv.custom_rating_split(nonboycott, boycott, {'only': boycott_uid_set}, {'only': like_boycott_uid_set})):
+            print('Do everything in series. On Iteration {}'.format(crossfold_index))
             (
                 trainset, nonboycott_testset, boycott_testset,
                 like_boycott_but_testset, all_like_boycott_testset,
@@ -401,6 +404,8 @@ def cross_validate_custom(
                     'boycott': boycott_testset, 'like-boycott': like_boycott_but_testset,
                     'all-like-boycott': all_like_boycott_testset
             }
+            print('About to run fit and score')
+            print(psutil.virtual_memory().used / (1024**3))
             out += [fit_and_score(
                 algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items, save_path
             )]
