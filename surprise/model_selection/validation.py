@@ -530,7 +530,7 @@ def fit_and_score_many(
         )]
 
     print('Going to run {} eval tasks, based on batchsize={} and total numbers of keys={}'.format(
-        len(delayed_list, batchsize, len(keys))
+        len(delayed_list), batchsize, len(keys)
     ))
     out = Parallel(n_jobs=-1, max_nbytes=None, verbose=5)((x for x in delayed_list))
     

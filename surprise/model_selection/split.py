@@ -143,6 +143,7 @@ class KFold():
                              'Must be >=2 and less than the number '
                              'of ratings'.format(len(nonboycott.raw_ratings)))
 
+
         # We use indices to avoid shuffling the original data.raw_ratings list.
         indices = np.arange(len(nonboycott.raw_ratings))
         boycott_indices = np.arange(len(boycott.raw_ratings))
@@ -154,6 +155,8 @@ class KFold():
         start, stop = 0, 0
         boycott_start, boycott_stop = 0, 0
         for i_fold in range(self.n_splits):
+            tic = time.time()
+
             start = stop
             stop += len(indices) // self.n_splits
             if i_fold < len(indices) % self.n_splits:
@@ -174,6 +177,7 @@ class KFold():
             trainset = nonboycott.construct_trainset(raw_trainset)
             row = {}
             
+            print('Stuff before boycott_uid_set took {} sec'.format(time.time() - tic))
             count = 0
             for (
                 identifier, boycott_uid_set
