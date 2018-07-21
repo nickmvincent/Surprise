@@ -433,7 +433,7 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
     """
     ret = []
     if load_path:
-        load_from = '{}_seed0_fold{}_predictions.txt'.format(load_path, crossfold_index)
+        load_from = '{}_seed0_fold{}_all_predictions.txt'.format(load_path, crossfold_index)
         print('load_from', load_from)
         with open(load_from, 'r') as file_handler:
             content = ['[' + x.strip('\n') + ']' for x in file_handler.readlines()]
