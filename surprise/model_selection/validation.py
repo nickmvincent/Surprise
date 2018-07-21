@@ -236,6 +236,7 @@ def cross_validate_many(
         crossfold_index, row
     ) in enumerate(cv.custom_rating_split(data, empty_boycott_data, boycott_uid_sets, like_boycott_uid_sets)):
         for identifier in boycott_uid_sets.keys():
+            print('validation.py, 239', identifier)
             (
                 trainset, nonboycott_testset, boycott_testset,
                 like_boycott_but_testset, 
@@ -255,6 +256,7 @@ def cross_validate_many(
                 crossfold_index_to_args[crossfold_index] = [
                     algo, trainset, specific_testsets, measures, False, crossfold_index
                 ]
+        print('Done splitting crossfold {}'.format(crossfold_index))
 
     outputs = []
     for i in range(len(crossfold_index_to_args)):
@@ -529,7 +531,7 @@ def fit_and_score_many(
         )]
 
 
-    out = Parallel(n_jobs=-1)((x for x in delayed_list))
+    out = Parallel(n_jobs=-1, max_nbytes=None, verbose=5)((x for x in delayed_list))
     
     # flatten
     rows = []
