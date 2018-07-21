@@ -520,17 +520,18 @@ def fit_and_score_many(
     keys = list(testset.keys())
     delayed_list = []
 
-    batchsize = 100 # TODO: why batch this many?
+    batchsize = 10 # TODO: why batch this many?
     for _, key_batch in enumerate(batch(keys, batchsize)):
         specific_testsets = {}
         for key in key_batch:
-            print('key in fit_and_score_many', key)
             specific_testsets[key] = testset[key]
         delayed_list += [delayed(eval_task)(
             algo, specific_testsets, measures, head_items, crossfold_index, load_path=load_path, test_mode=test_mode
         )]
 
-
+    print('Going to run {} eval tasks, based on batchsize={} and total numbers of keys={}'.format(
+        len(delayed_list, batchsize, len(keys))
+    ))
     out = Parallel(n_jobs=-1, max_nbytes=None, verbose=5)((x for x in delayed_list))
     
     # flatten

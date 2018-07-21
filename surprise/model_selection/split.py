@@ -169,11 +169,9 @@ class KFold():
 
             nonboycott_ratings_for_test = [nonboycott.raw_ratings[i] for i in indices[start:stop]]
 
-
             # nonboycott is a Data() object with the construct_trainset methods
             # whether we call nonboycott.construct_ or boycott.construct_ is arbitrary
             trainset = nonboycott.construct_trainset(raw_trainset)
-
             row = {}
             
             count = 0
@@ -184,14 +182,16 @@ class KFold():
             ) in zip(
                     boycott_uid_sets.items(), like_boycott_uid_sets.items()
             ):
+                tic = time.time()
+                
                 count += 1
                 # this is probably a good assert to keep b/c iteration of python dictionaries is weird
                 # but this works as is, so no need for OrderedDict
                 assert identifier == identifier2
                 boycott_testratings = []
                 nonboycott_testratings = []
-                # full name: like-boycotting-users-but-not-boycotting
                 like_boycott_but_testratings = []            
+
                 for rating_row in nonboycott_ratings_for_test:
                     uid = rating_row[0]
                     if uid in boycott_uid_set:
@@ -215,7 +215,10 @@ class KFold():
                 all_like_boycott_testset = nonboycott.construct_testset(all_like_boycott_testratings)
                 all_testset = nonboycott.construct_testset(all_testratings)
 
+                # using a list instead of a dict here leaves room for error.
+
                 row[identifier] = [trainset, nonboycott_testset, boycott_testset, like_boycott_but_testset, all_like_boycott_testset, all_testset]
+                print('identifier {} took {} sec'.format(identifier, time.time() - tic))
             yield row
         #     ret.append(row)
         # return ret 
