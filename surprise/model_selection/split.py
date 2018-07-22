@@ -155,7 +155,7 @@ class KFold():
         start, stop = 0, 0
         boycott_start, boycott_stop = 0, 0
         for i_fold in range(self.n_splits):
-            tic = time.time()
+            starttime_fold = time.time()
 
             start = stop
             stop += len(indices) // self.n_splits
@@ -167,18 +167,20 @@ class KFold():
             if i_fold < len(boycott_indices) % self.n_splits:
                 boycott_stop += 1
 
+            tic = time.time()
             raw_trainset = [nonboycott.raw_ratings[i] for i in chain(indices[:start],
                                                                indices[stop:])]
+            print('raw_trainset took {}'.format(time.time() - tic))
 
+            tic = time.time()
             nonboycott_ratings_for_test = [nonboycott.raw_ratings[i] for i in indices[start:stop]]
-
+            print('nonboycott_ratings_for_test took {}'.format(time.time() - tic))
             # nonboycott is a Data() object with the construct_trainset methods
             # whether we call nonboycott.construct_ or boycott.construct_ is arbitrary
             trainset = nonboycott.construct_trainset(raw_trainset)
             row = {}
             
-            print('Stuff before boycott_uid_set took {} sec'.format(time.time() - tic))
-            count = 0
+            print('Stuff before boycott_uid_set took {} sec'.format(time.time() - starttime_fold))
             for (
                 identifier, boycott_uid_set
             ), (
@@ -186,29 +188,37 @@ class KFold():
             ) in zip(
                     boycott_uid_sets.items(), like_boycott_uid_sets.items()
             ):
-                tic = time.time()
-                
-                count += 1
+                tic = time.time()                
                 # this is probably a good assert to keep b/c iteration of python dictionaries is weird
                 # but this works as is, so no need for OrderedDict
                 assert identifier == identifier2
                 boycott_testratings = []
                 nonboycott_testratings = []
-                like_boycott_but_testratings = []            
+                like_boycott_but_testratings = []
 
+                non_empty_boycott = len(boycott_uid_set) != 0
                 for rating_row in nonboycott_ratings_for_test:
                     uid = rating_row[0]
-                    if uid in boycott_uid_set:
+                    # NMV 7/21/2018 - this might squeeze out a tiny performance improvement, not sure if Python is trying to do this under the hood already
+                    # let's test and see! old runtime was 13-14 seconds for each identifier
+                    if non_empty_boycott and uid in boycott_uid_set:
                         boycott_testratings.append(rating_row)
                     else:
                         nonboycott_testratings.append(rating_row)
                         if uid in like_boycott_uid_set:
                             like_boycott_but_testratings.append(rating_row)
 
-                for rating_row in [
+                
+                # Nick Vincent 7/21/2018
+                # running through each element in a list comp and appending said element to a list
+                # is equivalent to just adding the contents of that list comp to the list
+                boycott_testratings += [
                     boycott.raw_ratings[i] for i in boycott_indices[boycott_start:boycott_stop]
-                ]:
-                    boycott_testratings.append(rating_row)
+                ]
+                # for rating_row in [
+                #     boycott.raw_ratings[i] for i in boycott_indices[boycott_start:boycott_stop]
+                # ]:
+                #     boycott_testratings.append(rating_row)
             
                 all_like_boycott_testratings = boycott_testratings + like_boycott_but_testratings
                 all_testratings = boycott_testratings + nonboycott_testratings

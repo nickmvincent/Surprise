@@ -226,6 +226,7 @@ def cross_validate_many(
 
     TODO: what's the difference here? Why would somebody use this one?
     """
+    starttime_cross_validate_many = time.time()
     crossfold_index_to_args = {}
     
     measures = [m.lower() for m in measures]
@@ -235,8 +236,8 @@ def cross_validate_many(
     for (
         crossfold_index, row
     ) in enumerate(cv.custom_rating_split(data, empty_boycott_data, boycott_uid_sets, like_boycott_uid_sets)):
+        tic = time.time()
         for identifier in boycott_uid_sets.keys():
-            print('validation.py, 239', identifier)
             (
                 trainset, nonboycott_testset, boycott_testset,
                 like_boycott_but_testset, 
@@ -256,18 +257,21 @@ def cross_validate_many(
                 crossfold_index_to_args[crossfold_index] = [
                     algo, trainset, specific_testsets, measures, False, crossfold_index
                 ]
-        print('Done splitting crossfold {}'.format(crossfold_index))
+        print('Done splitting crossfold {}, took {}'.format(crossfold_index, time.time() - tic))
 
+    print('Total prep time took {}'.format(time.time() - starttime_cross_validate_many))
     outputs = []
     for i in range(len(crossfold_index_to_args)):
         algo, trainset, specific_testsets, measures, return_train_measures, crossfold_index = crossfold_index_to_args[i]
-        # specific_testsets - what does this like right here?
+        # specific_testsets - what does this look like right here?
         # one key per sourcefile/id and evaluation group
         # e.g. all__SOMEFILE_0001
+        tic = time.time()
         output = fit_and_score_many(
             algo, trainset, specific_testsets, measures, return_train_measures, crossfold_index, head_items, load_path
         )
         outputs.append(output)
+        print('Finished fit and score many for crossfold {}, took {}'.format(i, time.time() - tic))
 
     ret = merge_scores(outputs)
     if verbose:
@@ -358,7 +362,6 @@ def cross_validate_custom(
     cv = KFold(cv, random_state=0)
     args_list = []
 
-
     # IF we're going to parallelize to the folds do this
     # number the crossfolds so we can keep track of them when/if they go out to threads
     # note that if you're threading at the experiment level this code doesn't do much b/c n_jobs will be set to 1.
@@ -433,6 +436,7 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
     """
     ret = []
     if load_path:
+        tic = time.time()
         load_from = '{}_seed0_fold{}_all_predictions.txt'.format(load_path, crossfold_index)
         print('load_from', load_from)
         with open(load_from, 'r') as file_handler:
@@ -443,6 +447,7 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
             for prediction in all_predictions:
                 uid_plus_iid = str(prediction[0]) + '_' + str(prediction[1])
                 uid_plus_iid_to_row[uid_plus_iid] = prediction
+        print('Loading predictions took {}'.format(time.time() - tic))
     for key, specific_testset in specific_testsets.items():
         tic = time.time()
         if load_path:
@@ -469,7 +474,7 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
         if not predictions:
             ret.append([key, {}, 0, 0])
             continue
-        test_time = time.time() - tic
+        
         test_measures = {}
         for m in measures:
             eval_func = getattr(accuracy, m.lower())
@@ -485,6 +490,7 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
                     test_measures['tail' + sub_measure] = tail_mean_val
             else:
                 test_measures[m] = result
+        test_time = time.time() - tic
         ret.append([key, test_measures, test_time, len(specific_testset)])
     return ret
 
@@ -520,7 +526,7 @@ def fit_and_score_many(
     keys = list(testset.keys())
     delayed_list = []
 
-    batchsize = 10 # TODO: why batch this many?
+    batchsize = 5 # TODO: why batch this many?
     for _, key_batch in enumerate(batch(keys, batchsize)):
         specific_testsets = {}
         for key in key_batch:
