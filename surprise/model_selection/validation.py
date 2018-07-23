@@ -404,9 +404,10 @@ def cross_validate_custom(
         out = []
         standards = []
         # load all the standard results
+        uid_plus_iid_to_row = {}
+
         if load_path:
             tic = time.time()
-            uid_plus_iid_to_row = {}
             for crossfold_index in range(num_folds):
                 load_from = '{}_seed0_fold{}_all_predictions.txt'.format(load_path, crossfold_index)
                 print('load_from', load_from)
@@ -490,7 +491,7 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
     for key, specific_testset in specific_testsets.items():
         print('specific testset key: {}'.format(key))
         tic = time.time()
-        if load_path or uid_plus_iid_to_row:
+        if uid_plus_iid_to_row: # if this dict is populated we should use it. if it is empty we can't use it, need to run algo.test
             predictions = []
             print('len of specific testset:', len(specific_testset))
             for prediction in specific_testset:
