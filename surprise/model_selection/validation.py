@@ -139,7 +139,7 @@ def cross_validate(algo, data, measures=['rmse', 'mae'], cv=None,
 
 
 
-def merge_scores(fit_and_score_outputs):
+def merge_scores(fit_and_score_outputs, standards_outputs=None):
     """
     Takes in a list of results.
     Each item in the list of results (fit_and_score_outputs) has a 
@@ -175,30 +175,37 @@ def merge_scores(fit_and_score_outputs):
     #     'num_tested': 4,
     #     'cv_index': 5
     # }
+    
+    # python gotcha. don't see default to []
+    if standards_outputs is None:
+        standards_outputs = []
     merged_ret = defaultdict(dict)
-    for output in fit_and_score_outputs: # we don't know what order these are in
-        test_metrics, _, fit_time, test_times, num_tested, cv_index = output
-        cv_index = int(cv_index)
-        key_template = '{metric_name}_{testset_name}'
-        for testset_name, metric_name_to_vals in test_metrics.items():
-            for metric_name, vals in metric_name_to_vals.items():
-                metric_key = key_template.format(**{
-                    'metric_name': metric_name,
-                    'testset_name': testset_name
-                })
-                merged_ret[metric_key][cv_index] = vals
-            for metric_name, source in (
-                ('test_times', test_times),
-                ('num_tested', num_tested)
-            ):
-                key = key_template.format(**{
-                    'metric_name': metric_name,
-                    'testset_name': testset_name
-                })
-                merged_ret[key][cv_index] = source[testset_name]
-            merged_ret[key_template.format(**{
-                'metric_name': 'fit_time', 'testset_name': testset_name
-            })][cv_index] = fit_time
+    for outputs, key_template in [
+        (fit_and_score_outputs, '{metric_name}_{testset_name}'),
+        (standards_outputs, 'standards_{metric_name}_{testset_name}'),
+    ]:
+        for output in outputs: # we don't know what order these are in
+            test_metrics, _, fit_time, test_times, num_tested, cv_index = output
+            cv_index = int(cv_index)
+            for testset_name, metric_name_to_vals in test_metrics.items():
+                for metric_name, vals in metric_name_to_vals.items():
+                    metric_key = key_template.format(**{
+                        'metric_name': metric_name,
+                        'testset_name': testset_name
+                    })
+                    merged_ret[metric_key][cv_index] = vals
+                for metric_name, source in (
+                    ('test_times', test_times),
+                    ('num_tested', num_tested)
+                ):
+                    key = key_template.format(**{
+                        'metric_name': metric_name,
+                        'testset_name': testset_name
+                    })
+                    merged_ret[key][cv_index] = source[testset_name]
+                merged_ret[key_template.format(**{
+                    'metric_name': 'fit_time', 'testset_name': testset_name
+                })][cv_index] = fit_time
 
 
     for metric_name, dict_with_int_keys in merged_ret.items():
@@ -257,7 +264,7 @@ def cross_validate_many(
                 crossfold_index_to_args[crossfold_index] = [
                     algo, trainset, specific_testsets, measures, False, crossfold_index
                 ]
-        print('Done splitting crossfold {}, took {}'.format(crossfold_index, time.time() - tic))
+        # this block is very quick.
 
     print('Total prep time took {}'.format(time.time() - starttime_cross_validate_many))
     outputs = []
@@ -358,6 +365,7 @@ def cross_validate_custom(
 
     '''
     measures = [m.lower() for m in measures]
+    num_folds = cv
 
     cv = KFold(cv, random_state=0)
     args_list = []
@@ -393,12 +401,28 @@ def cross_validate_custom(
     # But if we're not parallelizing folds (probably because we parallelized at the experiment level)
     # just do everthing in series so we don't use 5x memory for no reason
     else:
-        
         out = []
+        standards = []
+        # load all the standard results
+        if load_path:
+            tic = time.time()
+            uid_plus_iid_to_row = {}
+            for crossfold_index in range(num_folds):
+                load_from = '{}_seed0_fold{}_all_predictions.txt'.format(load_path, crossfold_index)
+                print('load_from', load_from)
+                with open(load_from, 'r') as file_handler:
+                    content = ['[' + x.strip('\n') + ']' for x in file_handler.readlines()]
+                    assert(content[0] == '[uid,iid,r_ui,est,details,crossfold_index]')
+                    all_predictions = [Prediction(*ast.literal_eval(line)[:-1]) for line in content[1:]]
+                    for prediction in all_predictions:
+                        uid_plus_iid = str(prediction[0]) + '_' + str(prediction[1])
+                        uid_plus_iid_to_row[uid_plus_iid] = prediction
+            print('Loading predictions from all foldstook {}'.format(time.time() - tic))
+                
         for (
             crossfold_index, row
         ) in enumerate(cv.custom_rating_split(nonboycott, boycott, {'only': boycott_uid_set}, {'only': like_boycott_uid_set})):
-            print('Do everything in series. On Iteration {}'.format(crossfold_index))
+            print('n_jobs = 1, so just do everything in series. On Iteration {}'.format(crossfold_index))
             (
                 trainset, nonboycott_testset, boycott_testset,
                 like_boycott_but_testset, all_like_boycott_testset,
@@ -409,13 +433,27 @@ def cross_validate_custom(
                     'boycott': boycott_testset, 'like-boycott': like_boycott_but_testset,
                     'all-like-boycott': all_like_boycott_testset
             }
-            print('About to run fit and score')
+            print('About to run fit and score, crossfold index is {}'.format(crossfold_index))
             print(psutil.virtual_memory().used / (1024**3))
-            out += [fit_and_score(
-                algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items, save_path
-            )]
 
-    ret = merge_scores(out)
+            results = fit_and_score(
+                algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items, save_path
+            )
+            out += [results]
+            print('Results:\n', results)
+
+            if uid_plus_iid_to_row:
+                print('\nWill compute standards now')
+
+                standards_results = fit_and_score(
+                    algo, None, testsets, measures, return_train_measures, crossfold_index, head_items, save_path, uid_plus_iid_to_row=uid_plus_iid_to_row
+                )
+                standards += [standards_results]
+                print('Standards:\n', standards)
+
+
+
+    ret = merge_scores(out, standards)
     if verbose:
         print(ret)
 
@@ -429,13 +467,13 @@ def batch(iterable, batch_size=1):
         yield iterable[ndx:min(ndx + batch_size, num_items)]
 
 
-def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, save_path=None, load_path=None, test_mode=False):
+def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, save_path=None, load_path=None, uid_plus_iid_to_row=None, test_mode=False):
     """
     Evaluate on specific testsets.
     This function exists to make testset evaluation easier to parallelize.
     """
     ret = []
-    if load_path:
+    if load_path and uid_plus_iid_to_row is None:
         tic = time.time()
         load_from = '{}_seed0_fold{}_all_predictions.txt'.format(load_path, crossfold_index)
         print('load_from', load_from)
@@ -448,10 +486,13 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
                 uid_plus_iid = str(prediction[0]) + '_' + str(prediction[1])
                 uid_plus_iid_to_row[uid_plus_iid] = prediction
         print('Loading predictions took {}'.format(time.time() - tic))
+        print(len(uid_plus_iid_to_row))
     for key, specific_testset in specific_testsets.items():
+        print('specific testset key: {}'.format(key))
         tic = time.time()
-        if load_path:
+        if load_path or uid_plus_iid_to_row:
             predictions = []
+            print('len of specific testset:', len(specific_testset))
             for prediction in specific_testset:
                 uid_plus_iid = str(prediction[0]) + '_' + str(prediction[1])
                 predictions.append(uid_plus_iid_to_row[uid_plus_iid])
@@ -560,7 +601,7 @@ def fit_and_score_many(
 
 def fit_and_score(
         algo, trainset, testset, measures,
-        return_train_measures=False, crossfold_index=None, head_items=None, save_path=None, load_path=None
+        return_train_measures=False, crossfold_index=None, head_items=None, save_path=None, load_path=None, uid_plus_iid_to_row=None
     ):
     '''Helper method that trains an algorithm and compute accuracy measures on
     a testset. Also report train and test times.
@@ -593,7 +634,7 @@ def fit_and_score(
             - The testing time in seconds.
     '''
     start_fit = time.time()
-    if load_path is None: # then we can't load predictions!
+    if load_path is None and uid_plus_iid_to_row is None: # then we can't load predictions or use a preloaded dict of predictions
         algo.fit(trainset)
     fit_time = time.time() - start_fit
     start_test = time.time()
@@ -607,7 +648,7 @@ def fit_and_score(
     if isinstance(testset, dict):
         # key is the testgroup (non-boycott, boycott, etc)
         # val is the list of ratings
-        results = eval_task(algo, testset, measures, head_items, crossfold_index, save_path=save_path, load_path=load_path)
+        results = eval_task(algo, testset, measures, head_items, crossfold_index, save_path=save_path, load_path=load_path, uid_plus_iid_to_row=uid_plus_iid_to_row)
         for (key, test_measures, test_time, num_tested_) in results:
             ret_measures[key] = test_measures
             test_times[key] = test_time
@@ -615,6 +656,7 @@ def fit_and_score(
 
     # backward compatability - in the original version testset is a list not a dict.
     # this is because typically there's just one testset, not multiple.
+    # we never use in this is our analyses, but kept it in case we want to try to merge main repo updates later
     else:
         predictions = algo.test(testset)
         test_time = time.time() - start_test                
