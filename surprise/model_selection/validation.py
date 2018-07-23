@@ -374,6 +374,8 @@ def cross_validate_custom(
     # number the crossfolds so we can keep track of them when/if they go out to threads
     # note that if you're threading at the experiment level this code doesn't do much b/c n_jobs will be set to 1.
     # build all the args that will be sent out in parallel
+    standards = []
+
     if n_jobs != 1:
         for (
             crossfold_index, row
@@ -402,7 +404,6 @@ def cross_validate_custom(
     # just do everthing in series so we don't use 5x memory for no reason
     else:
         out = []
-        standards = []
         # load all the standard results
         uid_plus_iid_to_row = {}
 
