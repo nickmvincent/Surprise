@@ -288,7 +288,7 @@ class DatasetAutoFolds(Dataset):
             #self.df = df
             self.raw_ratings = np.array(
                 [
-                    (uid, iid, float(r) + self.reader.offset, False # store timestamp as False because we're not using timestamp. Don't want to remove the column entirely and break the code
+                    (uid, iid, float(r) + self.reader.offset, 0 # store timestamp as False because we're not using timestamp. Don't want to remove the column entirely and break the code
                     ) for (uid, iid, r) in df.itertuples(index=False)
                 ], dtype=[('uid', 'int32'), ('iid', 'int32'), ('rating', float), ('timestamp', bool)]
             )
