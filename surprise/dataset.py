@@ -286,9 +286,14 @@ class DatasetAutoFolds(Dataset):
             self.raw_ratings = self.read_ratings(self.ratings_file)
         elif df is not None:
             #self.df = df
-            self.raw_ratings = np.array([np.array((uid, iid, float(r) + self.reader.offset, None))
-                                for (uid, iid, r) in
-                                df.itertuples(index=False)])
+            self.raw_ratings = np.array(
+                [
+                    (uid, iid, float(r) + self.reader.offset, False # store timestamp as False because we're not using timestamp. Don't want to remove the column entirely and break the code
+                    ) for (uid, iid, r) in df.itertuples(index=False)
+                ], dtype=[('uid', 'int32'), ('iid', 'int32'), ('rating', float), ('timestamp', bool)]
+            )
+            print('dtype', self.raw_ratings.dtype)
+            print('bytes / 1024 ** 3', self.raw_ratings.nbytes / (1024 ** 3))
         else:
             raise ValueError('Must specify ratings file or dataframe.')
 

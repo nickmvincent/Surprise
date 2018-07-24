@@ -419,7 +419,7 @@ def cross_validate_custom(
                     for prediction in all_predictions:
                         uid_plus_iid = str(prediction[0]) + '_' + str(prediction[1])
                         uid_plus_iid_to_row[uid_plus_iid] = prediction
-            print('Loading predictions from all foldstook {}'.format(time.time() - tic))
+            print('Loading predictions from all folds took {}'.format(time.time() - tic))
                 
         for (
             crossfold_index, row
@@ -436,24 +436,22 @@ def cross_validate_custom(
                     'all-like-boycott': all_like_boycott_testset
             }
             print('About to run fit and score, crossfold index is {}'.format(crossfold_index))
-            print(psutil.virtual_memory().used / (1024**3))
+            print('psutil.virtual_memory().used / (1024**3)', psutil.virtual_memory().used / (1024**3))
 
             results = fit_and_score(
                 algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items, save_path
             )
             out += [results]
-            print('Results:\n', results)
+            #print('Results:\n', results)
 
             if uid_plus_iid_to_row:
-                print('\nWill compute standards now')
+                #print('\nWill compute standards now')
 
                 standards_results = fit_and_score(
                     algo, None, testsets, measures, return_train_measures, crossfold_index, head_items, save_path, uid_plus_iid_to_row=uid_plus_iid_to_row
                 )
                 standards += [standards_results]
-                print('Standards:\n', standards)
-
-
+                #print('Standards:\n', standards)
 
     ret = merge_scores(out, standards)
     if verbose:
@@ -488,13 +486,10 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
                 uid_plus_iid = str(prediction[0]) + '_' + str(prediction[1])
                 uid_plus_iid_to_row[uid_plus_iid] = prediction
         print('Loading predictions took {}'.format(time.time() - tic))
-        print(len(uid_plus_iid_to_row))
     for key, specific_testset in specific_testsets.items():
-        print('specific testset key: {}'.format(key))
         tic = time.time()
         if uid_plus_iid_to_row: # if this dict is populated we should use it. if it is empty we can't use it, need to run algo.test
             predictions = []
-            print('len of specific testset:', len(specific_testset))
             for prediction in specific_testset:
                 uid_plus_iid = str(prediction[0]) + '_' + str(prediction[1])
                 predictions.append(uid_plus_iid_to_row[uid_plus_iid])
