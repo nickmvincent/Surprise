@@ -210,7 +210,13 @@ class Dataset:
         ir = defaultdict(list)
 
         # user raw id, item raw id, translated rating, time stamp
-        for urid, irid, r, timestamp in raw_trainset:
+        # NMV 7/24
+        if isinstance(raw_trainset, np.ndarray):
+            iterate_on = raw_trainset.tolist()
+        else:
+            iterate_on = raw_trainset
+
+        for urid, irid, r, _ in iterate_on.tolist():
             try:
                 uid = raw2inner_id_users[urid]
             except KeyError:
@@ -244,11 +250,13 @@ class Dataset:
         return trainset
 
     def construct_testset(self, raw_testset):
-
-        return [(ruid, riid, r_ui_trans)
+        if isinstance(raw_testset, np.ndarray):
+            return raw_testset[['uid', 'iid', 'rating']]
+        else:
+            return [(ruid, riid, r_ui_trans)
                 for (ruid, riid, r_ui_trans, _) in raw_testset]
-
-
+        
+        
 class DatasetUserFolds(Dataset):
     """A derived class from :class:`Dataset` for which folds (for
     cross-validation) are predefined."""
@@ -288,12 +296,12 @@ class DatasetAutoFolds(Dataset):
             #self.df = df
             self.raw_ratings = np.array(
                 [
-                    (uid, iid, float(r) + self.reader.offset, 0 # store timestamp as False because we're not using timestamp. Don't want to remove the column entirely and break the code
+                    (uid, iid, float(r) + self.reader.offset, 0 
+                    # store timestamp as False because we're not using timestamp. Don't want to remove the column entirely and break the code
                     ) for (uid, iid, r) in df.itertuples(index=False)
                 ], dtype=[('uid', 'int32'), ('iid', 'int32'), ('rating', float), ('timestamp', bool)]
             )
-            print('dtype', self.raw_ratings.dtype)
-            print('bytes / 1024 ** 3', self.raw_ratings.nbytes / (1024 ** 3))
+            print('raw_ratings.nbytes (GB):', self.raw_ratings.nbytes / (1024 ** 3))
         else:
             raise ValueError('Must specify ratings file or dataframe.')
 

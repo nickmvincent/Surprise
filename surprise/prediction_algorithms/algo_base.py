@@ -10,6 +10,8 @@ import warnings
 
 from six import get_unbound_function as guf
 
+import numpy as np
+
 from .. import similarities as sims
 from .predictions import PredictionImpossible
 from .predictions import Prediction
@@ -204,12 +206,15 @@ class AlgoBase(object):
             that contains all the estimated ratings.
         """
 
-        # The ratings are translated back to their original scale.
+        if isinstance(testset, np.ndarray):
+            iterate_on = testset.tolist()
+        else:
+            iterate_on = testset
         predictions = [self.predict(uid,
                                     iid,
                                     r_ui_trans - self.trainset.offset,
                                     verbose=verbose)
-                       for (uid, iid, r_ui_trans) in testset]
+                       for (uid, iid, r_ui_trans) in iterate_on]
         return predictions
 
     def compute_baselines(self):
