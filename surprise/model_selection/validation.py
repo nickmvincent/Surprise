@@ -424,7 +424,6 @@ def cross_validate_custom(
         for (
             crossfold_index, row
         ) in enumerate(cv.custom_rating_split(nonboycott, boycott, {'only': boycott_uid_set}, {'only': like_boycott_uid_set})):
-            print('n_jobs = 1, so just do everything in series. On Iteration {}'.format(crossfold_index))
             (
                 trainset, nonboycott_testset, boycott_testset,
                 like_boycott_but_testset, all_like_boycott_testset,
@@ -442,16 +441,13 @@ def cross_validate_custom(
                 algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items, save_path
             )
             out += [results]
-            #print('Results:\n', results)
 
             if uid_plus_iid_to_row:
-                #print('\nWill compute standards now')
 
                 standards_results = fit_and_score(
                     algo, None, testsets, measures, return_train_measures, crossfold_index, head_items, save_path, uid_plus_iid_to_row=uid_plus_iid_to_row
                 )
                 standards += [standards_results]
-                #print('Standards:\n', standards)
 
     ret = merge_scores(out, standards)
     if verbose:
