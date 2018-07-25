@@ -216,7 +216,7 @@ class Dataset:
         else:
             iterate_on = raw_trainset
 
-        for urid, irid, r, _ in iterate_on.tolist():
+        for urid, irid, r, _ in iterate_on:
             try:
                 uid = raw2inner_id_users[urid]
             except KeyError:
