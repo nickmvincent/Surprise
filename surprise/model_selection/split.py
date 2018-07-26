@@ -136,6 +136,10 @@ class KFold():
 
         Returns:
             list of [trainset, nonboycott_testset, boycott_testset, like_boycott_but_testset, all_like_boycott_testset, all_testset]
+        
+        Note 7/24
+        Making .raw_ratings into structured numpy array made this WAY (2-3x) slower
+        List comprehensions are represensible!
         '''
 
         if self.n_splits > len(nonboycott.raw_ratings) or self.n_splits < 2:
@@ -168,19 +172,24 @@ class KFold():
                 boycott_stop += 1
 
             tic = time.time()
-            raw_trainset = [nonboycott.raw_ratings[i] for i in chain(indices[:start],
-                                                               indices[stop:])]
-            print('raw_trainset took {}'.format(time.time() - tic))
+            # raw_trainset = [nonboycott.raw_ratings[i] for i in chain(indices[:start],
+            #                                                    indices[stop:])]
+            # NMV 7/24: numpy-ify this
+            raw_trainset = nonboycott.raw_ratings[np.hstack([indices[:start],indices[stop:]])]
+            print('raw_trainset took {} seconds'.format(time.time() - tic))
 
             tic = time.time()
-            nonboycott_ratings_for_test = [nonboycott.raw_ratings[i] for i in indices[start:stop]]
-            print('nonboycott_ratings_for_test took {}'.format(time.time() - tic))
+            #nonboycott_ratings_for_test = [nonboycott.raw_ratings[i] for i in indices[start:stop]]
+            # NMV 7/24: numpy-ify this
+            nonboycott_ratings_for_test = nonboycott.raw_ratings[indices[start:stop]]
+            print('nonboycott_ratings_for_test took {} seconds'.format(time.time() - tic))
+
             # nonboycott is a Data() object with the construct_trainset methods
             # whether we call nonboycott.construct_ or boycott.construct_ is arbitrary
             trainset = nonboycott.construct_trainset(raw_trainset)
             row = {}
             
-            print('Stuff before boycott_uid_set took {} sec'.format(time.time() - starttime_fold))
+            print('Stuff before boycott_uid_set took {} seconds'.format(time.time() - starttime_fold))
             for (
                 identifier, boycott_uid_set
             ), (
@@ -196,32 +205,36 @@ class KFold():
                 nonboycott_testratings = []
                 like_boycott_but_testratings = []
 
-                non_empty_boycott = len(boycott_uid_set) != 0
-                for rating_row in nonboycott_ratings_for_test:
-                    uid = rating_row[0]
-                    # NMV 7/21/2018 - this might squeeze out a tiny performance improvement, not sure if Python is trying to do this under the hood already
-                    # let's test and see! old runtime was 13-14 seconds for each identifier
-                    if non_empty_boycott and uid in boycott_uid_set:
-                        boycott_testratings.append(rating_row)
+                boycott_ratings_in_nonboycott_indices = []
+                nonboycott_indices = []
+                like_boycott_indices = []
+                for i, uid in enumerate(nonboycott_ratings_for_test['uid'].tolist()):
+                    if uid in boycott_uid_set:
+                        boycott_ratings_in_nonboycott_indices.append(i)
                     else:
-                        nonboycott_testratings.append(rating_row)
+                        nonboycott_indices.append(i)
                         if uid in like_boycott_uid_set:
-                            like_boycott_but_testratings.append(rating_row)
+                            like_boycott_indices.append(i)
+                
+                boycott_testratings = nonboycott_ratings_for_test[boycott_ratings_in_nonboycott_indices]
+                nonboycott_testratings = nonboycott_ratings_for_test[nonboycott_indices]
+                like_boycott_but_testratings = nonboycott_ratings_for_test[like_boycott_indices]
 
                 
                 # Nick Vincent 7/21/2018
                 # running through each element in a list comp and appending said element to a list
                 # is equivalent to just adding the contents of that list comp to the list
-                boycott_testratings += [
-                    boycott.raw_ratings[i] for i in boycott_indices[boycott_start:boycott_stop]
-                ]
-                # for rating_row in [
+                # boycott_testratings += [
                 #     boycott.raw_ratings[i] for i in boycott_indices[boycott_start:boycott_stop]
-                # ]:
-                #     boycott_testratings.append(rating_row)
-            
-                all_like_boycott_testratings = boycott_testratings + like_boycott_but_testratings
-                all_testratings = boycott_testratings + nonboycott_testratings
+                # ]
+
+                # NMV 7/24
+                # numpy-ify
+                boycott_testratings = np.concatenate(
+                    [boycott_testratings, boycott.raw_ratings[boycott_indices[boycott_start:boycott_stop]]], axis=0
+                )
+                all_like_boycott_testratings = np.concatenate([boycott_testratings, like_boycott_but_testratings], axis=0)
+                all_testratings = np.concatenate([boycott_testratings, nonboycott_testratings], axis=0)
 
                 nonboycott_testset = nonboycott.construct_testset(nonboycott_testratings)
                 boycott_testset = nonboycott.construct_testset(boycott_testratings)
@@ -232,7 +245,7 @@ class KFold():
                 # using a list instead of a dict here leaves room for error.
 
                 row[identifier] = [trainset, nonboycott_testset, boycott_testset, like_boycott_but_testset, all_like_boycott_testset, all_testset]
-                print('identifier {} took {} sec'.format(identifier, time.time() - tic))
+                print('identifier {} took {} seconds'.format(identifier, time.time() - tic))
             yield row
         #     ret.append(row)
         # return ret 

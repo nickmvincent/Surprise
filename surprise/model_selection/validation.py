@@ -10,6 +10,7 @@ from pprint import pprint
 import ast
 import psutil
 
+#from pympler import asizeof
 import numpy as np
 from joblib import Parallel
 from joblib import delayed
@@ -415,11 +416,25 @@ def cross_validate_custom(
                 with open(load_from, 'r') as file_handler:
                     content = ['[' + x.strip('\n') + ']' for x in file_handler.readlines()]
                     assert(content[0] == '[uid,iid,r_ui,est,details,crossfold_index]')
-                    all_predictions = [Prediction(*ast.literal_eval(line)[:-1]) for line in content[1:]]
+                    # BAD CODE
+                    numpyify = False
+                    if numpyify:
+                        # for some reason I haven't yet figured out, using this version makes standards_results WAY SLOWER (122 seconds -> 7000 seconds)
+                        # very bizarre, but using the old way (a list of PRediction NamedTuples instead of structured np array seems fine)
+                        all_predictions = np.array(
+                            [Prediction(*(ast.literal_eval(line)[:-2] + [0])) for line in content[1:]],
+                            dtype=[('uid', 'int32'), ('iid', 'int32'), ('r_ui', float), ('est', float), ('details', bool)]
+                        )
+                    else:
+                        all_predictions = [Prediction(*ast.literal_eval(line)[:-1]) for line in content[1:]]
+                    #print('asizeof all_predictions in MB')
+                    #print(asizeof.asizeof(all_predictions) / (1024 ** 2))
                     for prediction in all_predictions:
                         uid_plus_iid = str(prediction[0]) + '_' + str(prediction[1])
                         uid_plus_iid_to_row[uid_plus_iid] = prediction
-            print('Loading predictions from all folds took {}'.format(time.time() - tic))
+            print('Loading predictions for all folds took {}'.format(time.time() - tic))
+        #print('asizeof uid_plus_iid_to_row in MB')
+        #print(asizeof.asizeof(uid_plus_iid_to_row) / (1024 ** 2))
                 
         for (
             crossfold_index, row
@@ -434,19 +449,24 @@ def cross_validate_custom(
                     'boycott': boycott_testset, 'like-boycott': like_boycott_but_testset,
                     'all-like-boycott': all_like_boycott_testset
             }
-            print('About to run fit and score, crossfold index is {}'.format(crossfold_index))
-            print('psutil.virtual_memory().used / (1024**3)', psutil.virtual_memory().used / (1024**3))
+            print('About to run fit and score for crossfold index {}'.format(crossfold_index))
+            print('psutil.virtual_memory().used {} (GB)'.format(psutil.virtual_memory().used / (1024**3)))
+            #print('Asizeof testsets:', asizeof.asizeof(testsets) / (1024 ** 3))
 
+            tic = time.time()
             results = fit_and_score(
                 algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items, save_path
             )
+            print('fit_and_score for crossfold {} took {} seconds'.format(crossfold_index, time.time() - tic))
             out += [results]
 
             if uid_plus_iid_to_row:
-
+                tic = time.time()
                 standards_results = fit_and_score(
                     algo, None, testsets, measures, return_train_measures, crossfold_index, head_items, save_path, uid_plus_iid_to_row=uid_plus_iid_to_row
                 )
+                print('standards fit_and_score for crossfold {} took {} seconds'.format(crossfold_index, time.time() - tic))
+
                 standards += [standards_results]
 
     ret = merge_scores(out, standards)
@@ -483,18 +503,21 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
                 uid_plus_iid_to_row[uid_plus_iid] = prediction
         print('Loading predictions took {}'.format(time.time() - tic))
     for key, specific_testset in specific_testsets.items():
-        tic = time.time()
+        start_specific_testset = time.time()
         if uid_plus_iid_to_row: # if this dict is populated we should use it. if it is empty we can't use it, need to run algo.test
             predictions = []
-            for prediction in specific_testset:
+            tic = time.time()
+            if isinstance(specific_testset, np.ndarray):
+                iterate_on = specific_testset.tolist()
+            else:
+                iterate_on = specific_testset
+            for prediction in iterate_on:
                 uid_plus_iid = str(prediction[0]) + '_' + str(prediction[1])
                 predictions.append(uid_plus_iid_to_row[uid_plus_iid])
-            
+            # print('Took {} seconds to load predictions from uid_plus_iid_to_row to predictions list'.format(time.time() - tic))
             if test_mode:
                 print('Testing')
                 computed = algo.test(specific_testset)
-                print('loaded\n', predictions[:3])
-                print('computed\n', computed[:3])
                 assert predictions == computed
         else:
             predictions = algo.test(specific_testset)
@@ -508,9 +531,14 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
         if not predictions:
             ret.append([key, {}, 0, 0])
             continue
+
+        # print('predictions[:5]', predictions[:5])
+        # print(type(predictions))
+        # print(type(predictions[0]))
         
         test_measures = {}
         for m in measures:
+            tic = time.time()
             eval_func = getattr(accuracy, m.lower())
             result = eval_func(predictions, verbose=0)
             if 'ndcg' in m:
@@ -524,7 +552,9 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
                     test_measures['tail' + sub_measure] = tail_mean_val
             else:
                 test_measures[m] = result
-        test_time = time.time() - tic
+            #print('measure {} took {} seconds'.format(m, time.time()-tic))
+        test_time = time.time() - start_specific_testset
+        print('test_time', test_time)
         ret.append([key, test_measures, test_time, len(specific_testset)])
     return ret
 
