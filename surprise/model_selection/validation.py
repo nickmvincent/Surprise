@@ -11,6 +11,7 @@ import ast
 import psutil
 
 #from pympler import asizeof
+import pandas as pd
 import numpy as np
 from joblib import Parallel
 from joblib import delayed
@@ -21,6 +22,8 @@ from .split import get_cv, KFold
 from .. import accuracy
 
 from surprise.prediction_algorithms.predictions import Prediction
+from surprise import Dataset, Reader
+
 
 
 def cross_validate(algo, data, measures=['rmse', 'mae'], cv=None,
@@ -291,7 +294,7 @@ def cross_validate_many(
 def cross_validate_custom(
         algo, nonboycott, boycott, boycott_uid_set, like_boycott_uid_set, measures=None, cv=5,
         return_train_measures=False, n_jobs=-1,
-        pre_dispatch='2*n_jobs', verbose=False, head_items=None, save_path=None, load_path=None):
+        pre_dispatch='2*n_jobs', verbose=False, head_items=None, save_path=None, load_path=None, data=None):
     '''
     Run a cross validation procedure for a given algorithm, reporting accuracy
     measures and computation times.
@@ -406,33 +409,33 @@ def cross_validate_custom(
     else:
         out = []
         # load all the standard results
-        uid_plus_iid_to_row = {}
 
-        if load_path:
-            tic = time.time()
-            for crossfold_index in range(num_folds):
-                load_from = '{}_seed0_fold{}_all_predictions.txt'.format(load_path, crossfold_index)
-                print('load_from', load_from)
-                with open(load_from, 'r') as file_handler:
-                    content = ['[' + x.strip('\n') + ']' for x in file_handler.readlines()]
-                    assert(content[0] == '[uid,iid,r_ui,est,details,crossfold_index]')
-                    # BAD CODE
-                    numpyify = False
-                    if numpyify:
-                        # for some reason I haven't yet figured out, using this version makes standards_results WAY SLOWER (122 seconds -> 7000 seconds)
-                        # very bizarre, but using the old way (a list of PRediction NamedTuples instead of structured np array seems fine)
-                        all_predictions = np.array(
-                            [Prediction(*(ast.literal_eval(line)[:-2] + [0])) for line in content[1:]],
-                            dtype=[('uid', 'int32'), ('iid', 'int32'), ('r_ui', float), ('est', float), ('details', bool)]
-                        )
-                    else:
-                        all_predictions = [Prediction(*ast.literal_eval(line)[:-1]) for line in content[1:]]
-                    #print('asizeof all_predictions in MB')
-                    #print(asizeof.asizeof(all_predictions) / (1024 ** 2))
-                    for prediction in all_predictions:
-                        uid_plus_iid = str(prediction[0]) + '_' + str(prediction[1])
-                        uid_plus_iid_to_row[uid_plus_iid] = prediction
-            print('Loading predictions for all folds took {}'.format(time.time() - tic))
+        # if load_path:
+        #     tic = time.time()
+        #     for crossfold_index in range(num_folds):
+        #         load_from = '{}_seed0_fold{}_all_predictions.txt'.format(load_path, crossfold_index)
+        #         print('load_from', load_from)
+        #         with open(load_from, 'r') as file_handler:
+        #             content = ['[' + x.strip('\n') + ']' for x in file_handler.readlines()]
+        #             assert(content[0] == '[uid,iid,r_ui,est,details,crossfold_index]')
+        #             # BAD CODE
+        #             numpyify = False
+        #             if numpyify:
+        #                 # for some reason I haven't yet figured out, using this version makes standards_results WAY SLOWER (122 seconds -> 7000 seconds)
+        #                 # very bizarre, but using the old way (a list of PRediction NamedTuples instead of structured np array seems fine)
+        #                 all_predictions = np.array(
+        #                     [Prediction(*(ast.literal_eval(line)[:-2] + [0])) for line in content[1:]],
+        #                     dtype=[('uid', 'int32'), ('iid', 'int32'), ('r_ui', float), ('est', float), ('details', bool)]
+        #                 )
+        #             else:
+        #                 all_predictions = [Prediction(*ast.literal_eval(line)[:-1]) for line in content[1:]]
+        #         for prediction in all_predictions:
+        #             uid_plus_iid = str(prediction[0]) + '_' + str(prediction[1])
+        #             if uid_plus_iid in uid_plus_iid_to_row:
+        #                 raise ValueError('Got a duplicate somehow! Fix the saved *_all_predictions.txt files!')
+        #             uid_plus_iid_to_row[uid_plus_iid] = prediction
+        #     print('length of uid_plus_iid_to_row dict: {}'.format(len(uid_plus_iid_to_row)))
+        #     print('Loading predictions for all folds took {}'.format(time.time() - tic))
         #print('asizeof uid_plus_iid_to_row in MB')
         #print(asizeof.asizeof(uid_plus_iid_to_row) / (1024 ** 2))
                 
@@ -445,13 +448,12 @@ def cross_validate_custom(
                 all_testset
             ) = row['only']
             testsets =  {
-                    'all': all_testset, 'non-boycott': nonboycott_testset,
-                    'boycott': boycott_testset, 'like-boycott': like_boycott_but_testset,
-                    'all-like-boycott': all_like_boycott_testset
+                'all': all_testset, 'non-boycott': nonboycott_testset,
+                'boycott': boycott_testset, 'like-boycott': like_boycott_but_testset,
+                'all-like-boycott': all_like_boycott_testset
             }
             print('About to run fit and score for crossfold index {}'.format(crossfold_index))
             print('psutil.virtual_memory().used {} (GB)'.format(psutil.virtual_memory().used / (1024**3)))
-            #print('Asizeof testsets:', asizeof.asizeof(testsets) / (1024 ** 3))
 
             tic = time.time()
             results = fit_and_score(
@@ -460,14 +462,64 @@ def cross_validate_custom(
             print('fit_and_score for crossfold {} took {} seconds'.format(crossfold_index, time.time() - tic))
             out += [results]
 
-            if uid_plus_iid_to_row:
+            # if uid_plus_iid_to_row:
+            #     tic = time.time()
+            #     standards_results = fit_and_score(
+            #         None, None, testsets, measures, return_train_measures, crossfold_index, head_items, uid_plus_iid_to_row=uid_plus_iid_to_row
+            #     )
+            #     print('standards fit_and_score for crossfold {} took {} seconds'.format(crossfold_index, time.time() - tic))
+
+            #     standards += [standards_results]
+        if load_path:
+            for (
+                crossfold_index, row
+            ) in enumerate(cv.custom_rating_split(
+                data, Dataset.load_from_df(pd.DataFrame(), reader=Reader()), {'only': boycott_uid_set}, {'only': like_boycott_uid_set})
+            ):
+                uid_plus_iid_to_row = {}
                 tic = time.time()
-                standards_results = fit_and_score(
-                    algo, None, testsets, measures, return_train_measures, crossfold_index, head_items, save_path, uid_plus_iid_to_row=uid_plus_iid_to_row
+                load_from = '{}_seed0_fold{}_all_predictions.txt'.format(load_path, crossfold_index)
+                print('load_from', load_from)
+                with open(load_from, 'r') as file_handler:
+                    content = ['[' + x.strip('\n') + ']' for x in file_handler.readlines()]
+                    assert(content[0] == '[uid,iid,r_ui,est,details,crossfold_index]')
+                    numpyify = False
+                    if numpyify:
+                        # for some reason I haven't yet figured out, using this version makes standards_results WAY SLOWER (122 seconds -> 7000 seconds)
+                        # very bizarre, but using the old way (a list of PRediction NamedTuples instead of structured np array seems fine)
+                        all_predictions = np.array(
+                            [Prediction(*(ast.literal_eval(line)[:-2] + [0])) for line in content[1:]],
+                            dtype=[('uid', 'int32'), ('iid', 'int32'), ('r_ui', float), ('est', float), ('details', bool)]
+                        )
+                    else:
+                        all_predictions = [Prediction(*ast.literal_eval(line)[:-1]) for line in content[1:]]
+                for prediction in all_predictions:
+                    uid_plus_iid = str(prediction[0]) + '_' + str(prediction[1])
+                    if uid_plus_iid in uid_plus_iid_to_row:
+                        raise ValueError('Got a duplicate somehow! Fix the saved *_all_predictions.txt files!')
+                    uid_plus_iid_to_row[uid_plus_iid] = prediction
+                print('Loading predictions for fold {} took {}'.format(crossfold_index, time.time() - tic))
+                (
+                    trainset, nonboycott_testset, boycott_testset,
+                    like_boycott_but_testset, all_like_boycott_testset,
+                    all_testset
+                ) = row['only']
+                testsets =  {
+                    'all': all_testset, 'non-boycott': nonboycott_testset,
+                    'boycott': boycott_testset, 'like-boycott': like_boycott_but_testset,
+                    'all-like-boycott': all_like_boycott_testset
+                }
+                print('About to run standards fit and score for crossfold index {}'.format(crossfold_index))
+                print('psutil.virtual_memory().used {} (GB)'.format(psutil.virtual_memory().used / (1024**3)))
+
+                tic = time.time()
+                results = fit_and_score(
+                    None, None, testsets, measures, return_train_measures, crossfold_index, head_items, save_path, uid_plus_iid_to_row=uid_plus_iid_to_row
                 )
                 print('standards fit_and_score for crossfold {} took {} seconds'.format(crossfold_index, time.time() - tic))
+                standards += [results]
 
-                standards += [standards_results]
+        
 
     ret = merge_scores(out, standards)
     if verbose:
@@ -483,7 +535,7 @@ def batch(iterable, batch_size=1):
         yield iterable[ndx:min(ndx + batch_size, num_items)]
 
 
-def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, save_path=None, load_path=None, uid_plus_iid_to_row=None, test_mode=False):
+def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, save_path=None, load_path=None, uid_plus_iid_to_row=None):
     """
     Evaluate on specific testsets.
     This function exists to make testset evaluation easier to parallelize.
@@ -501,28 +553,27 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
             for prediction in all_predictions:
                 uid_plus_iid = str(prediction[0]) + '_' + str(prediction[1])
                 uid_plus_iid_to_row[uid_plus_iid] = prediction
-        print('Loading predictions took {}'.format(time.time() - tic))
+        print('Loading predictions within eval_task took {}'.format(time.time() - tic))
+
     for key, specific_testset in specific_testsets.items():
         start_specific_testset = time.time()
-        if uid_plus_iid_to_row: # if this dict is populated we should use it. if it is empty we can't use it, need to run algo.test
+        if uid_plus_iid_to_row:
+            # if this dict is populated we should use it. if it is empty we can't use it, need to run algo.test
             predictions = []
             tic = time.time()
             if isinstance(specific_testset, np.ndarray):
                 iterate_on = specific_testset.tolist()
             else:
                 iterate_on = specific_testset
+
             for prediction in iterate_on:
                 uid_plus_iid = str(prediction[0]) + '_' + str(prediction[1])
                 predictions.append(uid_plus_iid_to_row[uid_plus_iid])
-            # print('Took {} seconds to load predictions from uid_plus_iid_to_row to predictions list'.format(time.time() - tic))
-            if test_mode:
-                print('Testing')
-                computed = algo.test(specific_testset)
-                assert predictions == computed
+            print('Took {} seconds to load {} predictions from uid_plus_iid_to_row'.format(time.time() - tic, len(predictions)))
         else:
             predictions = algo.test(specific_testset)
 
-        if save_path and load_path is None: # if you just loaded the predictions, don't save them again, waste of time...
+        if save_path and load_path is None and uid_plus_iid_to_row is None: # if you just loaded the predictions, don't save them again, waste of time...
             with open('{}_seed0_fold{}_{}_predictions.txt'.format(save_path, crossfold_index, key), 'w') as file_handler:
                 file_handler.write('uid,iid,r_ui,est,details,crossfold_index\n')
                 for prediction in predictions:
@@ -532,9 +583,7 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
             ret.append([key, {}, 0, 0])
             continue
 
-        # print('predictions[:5]', predictions[:5])
-        # print(type(predictions))
-        # print(type(predictions[0]))
+        #print('key: {}, predictions[:3]: {}'.format(key, predictions[:3]))
         
         test_measures = {}
         for m in measures:
@@ -552,9 +601,7 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
                     test_measures['tail' + sub_measure] = tail_mean_val
             else:
                 test_measures[m] = result
-            #print('measure {} took {} seconds'.format(m, time.time()-tic))
         test_time = time.time() - start_specific_testset
-        print('test_time', test_time)
         ret.append([key, test_measures, test_time, len(specific_testset)])
     return ret
 
@@ -562,7 +609,7 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
 def fit_and_score_many(
         algo, trainset, testset, measures,
         return_train_measures=False, crossfold_index=None, head_items=None,
-        load_path=None, test_mode=False
+        load_path=None
     ):
     """
     see fit and score
@@ -574,7 +621,7 @@ def fit_and_score_many(
     Consider a refactor.
     """
     start_fit = time.time()
-    if load_path is None or test_mode:
+    if load_path is None:
         algo.fit(trainset)
     fit_time = time.time() - start_fit
 
@@ -596,7 +643,7 @@ def fit_and_score_many(
         for key in key_batch:
             specific_testsets[key] = testset[key]
         delayed_list += [delayed(eval_task)(
-            algo, specific_testsets, measures, head_items, crossfold_index, load_path=load_path, test_mode=test_mode
+            algo, specific_testsets, measures, head_items, crossfold_index, load_path=load_path
         )]
 
     print('Going to run {} eval tasks, based on batchsize={} and total numbers of keys={}'.format(
@@ -624,7 +671,8 @@ def fit_and_score_many(
 
 def fit_and_score(
         algo, trainset, testset, measures,
-        return_train_measures=False, crossfold_index=None, head_items=None, save_path=None, load_path=None, uid_plus_iid_to_row=None
+        return_train_measures=False, crossfold_index=None, head_items=None, save_path=None, load_path=None,
+        uid_plus_iid_to_row=None
     ):
     '''Helper method that trains an algorithm and compute accuracy measures on
     a testset. Also report train and test times.
@@ -657,7 +705,8 @@ def fit_and_score(
             - The testing time in seconds.
     '''
     start_fit = time.time()
-    if load_path is None and uid_plus_iid_to_row is None: # then we can't load predictions or use a preloaded dict of predictions
+    if load_path is None and uid_plus_iid_to_row is None:
+        # then we can't load predictions or use a preloaded dict of predictions
         algo.fit(trainset)
     fit_time = time.time() - start_fit
     start_test = time.time()
@@ -671,7 +720,10 @@ def fit_and_score(
     if isinstance(testset, dict):
         # key is the testgroup (non-boycott, boycott, etc)
         # val is the list of ratings
-        results = eval_task(algo, testset, measures, head_items, crossfold_index, save_path=save_path, load_path=load_path, uid_plus_iid_to_row=uid_plus_iid_to_row)
+        results = eval_task(
+            algo, testset, measures, head_items, crossfold_index, save_path=save_path,
+            load_path=load_path, uid_plus_iid_to_row=uid_plus_iid_to_row,
+        )
         for (key, test_measures, test_time, num_tested_) in results:
             ret_measures[key] = test_measures
             test_times[key] = test_time
