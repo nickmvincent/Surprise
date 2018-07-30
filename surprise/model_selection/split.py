@@ -176,20 +176,20 @@ class KFold():
             #                                                    indices[stop:])]
             # NMV 7/24: numpy-ify this
             raw_trainset = nonboycott.raw_ratings[np.hstack([indices[:start],indices[stop:]])]
-            print('raw_trainset took {} seconds'.format(time.time() - tic))
+            #print('raw_trainset took {} seconds'.format(time.time() - tic))
 
             tic = time.time()
             #nonboycott_ratings_for_test = [nonboycott.raw_ratings[i] for i in indices[start:stop]]
             # NMV 7/24: numpy-ify this
             nonboycott_ratings_for_test = nonboycott.raw_ratings[indices[start:stop]]
-            print('nonboycott_ratings_for_test took {} seconds'.format(time.time() - tic))
+            #print('nonboycott_ratings_for_test took {} seconds'.format(time.time() - tic))
 
             # nonboycott is a Data() object with the construct_trainset methods
             # whether we call nonboycott.construct_ or boycott.construct_ is arbitrary
             trainset = nonboycott.construct_trainset(raw_trainset)
             row = {}
             
-            print('Stuff before boycott_uid_set took {} seconds'.format(time.time() - starttime_fold))
+            #print('Stuff before boycott_uid_set took {} seconds'.format(time.time() - starttime_fold))
             for (
                 identifier, boycott_uid_set
             ), (
@@ -245,7 +245,7 @@ class KFold():
                 # using a list instead of a dict here leaves room for error.
 
                 row[identifier] = [trainset, nonboycott_testset, boycott_testset, like_boycott_but_testset, all_like_boycott_testset, all_testset]
-                print('identifier {} took {} seconds'.format(identifier, time.time() - tic))
+                #print('identifier {} took {} seconds'.format(identifier, time.time() - tic))
             yield row
         #     ret.append(row)
         # return ret 

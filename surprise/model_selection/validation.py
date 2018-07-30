@@ -270,7 +270,7 @@ def cross_validate_many(
                 ]
         # this block is very quick.
 
-    print('Total prep time took {}'.format(time.time() - starttime_cross_validate_many))
+    #print('Total prep time took {}'.format(time.time() - starttime_cross_validate_many))
     outputs = []
     for i in range(len(crossfold_index_to_args)):
         algo, trainset, specific_testsets, measures, return_train_measures, crossfold_index = crossfold_index_to_args[i]
@@ -498,7 +498,7 @@ def cross_validate_custom(
                     if uid_plus_iid in uid_plus_iid_to_row:
                         raise ValueError('Got a duplicate somehow! Fix the saved *_all_predictions.txt files!')
                     uid_plus_iid_to_row[uid_plus_iid] = prediction
-                print('Loading predictions for fold {} took {}'.format(crossfold_index, time.time() - tic))
+                #print('Loading predictions for fold {} took {}'.format(crossfold_index, time.time() - tic))
                 (
                     trainset, nonboycott_testset, boycott_testset,
                     like_boycott_but_testset, all_like_boycott_testset,
@@ -569,7 +569,7 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
             for prediction in iterate_on:
                 uid_plus_iid = str(prediction[0]) + '_' + str(prediction[1])
                 predictions.append(uid_plus_iid_to_row[uid_plus_iid])
-            print('Took {} seconds to load {} predictions from uid_plus_iid_to_row'.format(time.time() - tic, len(predictions)))
+            #print('Took {} seconds to load {} predictions from uid_plus_iid_to_row'.format(time.time() - tic, len(predictions)))
         else:
             predictions = algo.test(specific_testset)
 
@@ -583,7 +583,6 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
             ret.append([key, {}, 0, 0])
             continue
 
-        #print('key: {}, predictions[:3]: {}'.format(key, predictions[:3]))
         
         test_measures = {}
         for m in measures:
