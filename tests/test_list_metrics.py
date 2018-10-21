@@ -6,7 +6,7 @@ from math import sqrt
 
 import pytest
 
-from surprise.accuracy import mae, prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull
+from surprise.accuracy import mae, prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits
 import numpy as np
 
 
@@ -35,24 +35,27 @@ def test_prec():
     """Tests for the MAE function."""
 
     predictions = [pred(1, 1)]
-    res = prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull(predictions)
-    prec10, prec5, rec10, rec5, ndgc10, ndcg5, ndcgfull = res
+    res = prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits(predictions)
+    prec10, prec5, rec10, rec5, ndgc10, ndcg5, ndcgfull, hits = res
 
     # there are no hits so prec is nan
     assert np.isnan(prec10[0])
     assert np.isnan(rec5[0])
+    assert hits[0] == 0
 
-    predictions = [pred(1, 1), pred(5, 5)]
-    res = prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull(predictions)
-    prec10, prec5, rec10, rec5, ndgc10, ndcg5, ndcgfull = res
+    predictions = [pred(1, 1), pred(5, 5), pred(5, 5)]
+    res = prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits(predictions)
+    prec10, prec5, rec10, rec5, ndgc10, ndcg5, ndcgfull, hits = res
 
     # precison is 1 and recall is 1
     assert prec10[0] == prec5[0] == rec10[0] == rec5[0] == 1
+    assert hits[0] == 2
+
 
     # true, est
     predictions = [pred(1, 1), pred(5, 3), pred(5, 5)]
-    res = prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull(predictions)
-    prec10, prec5, rec10, rec5, ndgc10, ndcg5, ndcgfull = res
+    res = prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits(predictions)
+    prec10, prec5, rec10, rec5, ndgc10, ndcg5, ndcgfull, hits = res
 
     assert prec10[0] == prec5[0] == 1
     assert rec10[0] == rec5[0] == 1
@@ -69,8 +72,8 @@ def test_prec():
         pred(5, 1), pred(4, 1), pred(5, 1),
         
     ]
-    res = prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull(predictions)
-    prec10, prec5, rec10, rec5, ndgc10, ndcg5, ndcgfull = res
+    res = prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits(predictions)
+    prec10, prec5, rec10, rec5, ndgc10, ndcg5, ndcgfull, hits = res
     print(res)
 
     # there are 6 positives and 3 are correct. But only top 10 are considered!
@@ -81,6 +84,25 @@ def test_prec():
     assert rec10[0] == 4/6
     # in the top 5, there should be 5 positives. we only get 4
     assert rec5[0] == 2/6
+    assert hits[0] == 3
+
+    """
+    start new
+    """
+    predictions = [
+        pred(5, 1), pred(5, 1), pred(5, 1),
+        pred(5, 1), pred(5, 1), pred(5, 1),
+        pred(5, 1), pred(5, 1), pred(5, 1),
+        pred(5, 1),
+        pred(1,5), pred(1,5), pred(1,5),
+        pred(1,5), pred(1,5), pred(1,5),
+        pred(1,5), pred(1,5), pred(1,5),
+        pred(1,5),
+    ]
+    res = prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits(predictions)
+    prec10, prec5, rec10, rec5, ndgc10, ndcg5, ndcgfull, hits = res
+    print(res)
+    assert hits[0] == 0
 
     
 
