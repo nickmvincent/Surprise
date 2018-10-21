@@ -165,7 +165,7 @@ def dcg_at_k(ratings):
     ])
 
 
-def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull(predictions, verbose=True, head_items=None):
+def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits(predictions, verbose=True, head_items=None):
     """
     Return precision and recall at k metrics for each user.
     Also returns ndcg_at_k.
@@ -183,6 +183,7 @@ def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull(predictions, verbose=T
 
     prec10, prec5, rec10, rec5 = {}, {}, {}, {}
     ndcg10, ndcg5, ndcgfull = {}, {}, {}
+    n_hits = {}
     for uid, user_ratings in user_est_true.items():
         # Sort user ratings by estimated value
         user_ratings_sorted_by_est = sorted(user_ratings, key=lambda x: x[0], reverse=True)
@@ -223,6 +224,12 @@ def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull(predictions, verbose=T
             if n_rel:
                 recdic[uid] = n_rel_k / n_rel
 
+        # calculate the full_hits
+        items_with_est_over_t = [(est, true_r) for (est, true_r) in user_ratings_sorted_by_est if est >= threshold]
+        n_hits[uid] = sum((true_r >= threshold) for (_, true_r) in items_with_est_over_t)
+
+        
+
     if verbose:
         pass
     
@@ -236,10 +243,11 @@ def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull(predictions, verbose=T
             (ndcg10.values(), len(ndcg10.values()) / n_users),
             (ndcg5.values(), len(ndcg5.values()) / n_users),
             (ndcgfull.values(), len(ndcgfull.values()) / n_users),
+            (n_hits.values(), len(n_hits.values()) / n_users),
         )
     else:
         ret = []
-        for _ in range(7):
+        for _ in range(8):
             ret.append(([], float('nan')))
     ret = tuple(
         [(np.mean(list(vals)), frac) for (vals, frac) in ret]
