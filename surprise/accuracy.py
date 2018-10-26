@@ -236,8 +236,6 @@ def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits_normhits(predicti
         if possible_hits:
             norm_hits[uid] = n_hits[uid] / possible_hits
 
-        
-
     if verbose:
         pass
     
