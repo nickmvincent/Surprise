@@ -85,9 +85,17 @@ class TwentyMean(AlgoBase):
         movie_to_sum = defaultdict(int)
         movie_to_count = defaultdict(int)
         # (uid, iid, rating)
+        uid_to_skip = {}
         for u, i, r in trainset.all_ratings():
-            if np.random.rand() > 0.2:
-                continue
+            if u not in uid_to_skip:
+                if np.random.rand() > 0.2:
+                    uid_to_skip[u] = True
+                    continue
+                else:
+                    uid_to_skip[u] = False
+            else:
+                if uid_to_skip[u] is True:
+                    continue
             movie_to_sum[i] += r
             movie_to_count[i] += 1
         self.movie_to_mean = {}
