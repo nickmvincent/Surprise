@@ -170,7 +170,8 @@ def dcg_at_k(ratings):
 # originally used it so I could match the existing API for accuracy functions
 # and I didn't want to to do the list sorting more than one time.
 # but this has gotten a bit crazy
-def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits_normhits(predictions, verbose=True, head_items=None):
+#def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits_normhits(predictions, verbose=True, head_items=None):
+def list_metrics(predictions, verbose=True, head_items=None):
     """
     Return precision and recall at k metrics for each user.
     Also returns ndcg_at_k.
@@ -188,7 +189,8 @@ def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits_normhits(predicti
 
     prec10, prec5, rec10, rec5 = {}, {}, {}, {}
     ndcg10, ndcg5, ndcgfull = {}, {}, {}
-    n_hits, norm_hits = {}, {}
+    n_hits, normhits = {}, {}
+    avg_rating, n_false_pos = {}, {}
     for uid, user_ratings in user_est_true.items():
         # Sort user ratings by estimated value
         user_ratings_sorted_by_est = sorted(user_ratings, key=lambda x: x[0], reverse=True)
@@ -233,31 +235,58 @@ def prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits_normhits(predicti
         items_with_est_over_t = [(est, true_r) for (est, true_r) in user_ratings_sorted_by_est if est >= threshold]
         possible_hits = sum((true_r >= threshold) for (_, true_r) in user_ratings_sorted_by_est)
         n_hits[uid] = sum((true_r >= threshold) for (_, true_r) in items_with_est_over_t)
+        n_false_pos[uid] = sum((true_r < threshold) for (_, true_r) in items_with_est_over_t)
+        avg_rating[uid] = np.mean([est for (est, _) in user_ratings_sorted_by_est])
         if possible_hits:
-            norm_hits[uid] = n_hits[uid] / possible_hits
+            normhits[uid] = n_hits[uid] / possible_hits
 
     if verbose:
         pass
     
     n_users = len(user_est_true)
+    dicts_and_names = [
+        (prec10, 'prec10t{}'.format(threshold)),
+        (prec5, 'prec5t{}'.format(threshold)),
+        (rec10, 'rec10t{}'.format(threshold)),
+        (rec5, 'rec5t{}'.format(threshold)),
+        (ndcg10, 'ndcg10'),
+        (ndcg5, 'ndcg5'),
+        (ndcgfull, 'ndcgfull'),
+        (n_hits, 'hits'),
+        (normhits, 'normhits'),
+        (avg_rating, 'avg_rating'),
+        (n_false_pos, 'falsepos'),
+    ]
     if n_users:
         ret = (
-            (prec10.values(), len(prec10.values()) / n_users),
-            (prec5.values(), len(prec5.values()) / n_users),
-            (rec10.values(), len(rec10.values()) / n_users),
-            (rec5.values(), len(rec5.values()) / n_users),
-            (ndcg10.values(), len(ndcg10.values()) / n_users),
-            (ndcg5.values(), len(ndcg5.values()) / n_users),
-            (ndcgfull.values(), len(ndcgfull.values()) / n_users),
-            (n_hits.values(), len(n_hits.values()) / n_users),
-            (norm_hits.values(), len(norm_hits.values()) / n_users),
+            (dic.values(), len(dic.values()) / n_users, name) for dic, name in dicts_and_names
         )
+
+        # ret = (
+        #     (prec10.values(), len(prec10.values()) / n_users, 'prec10t{}'.format(threshold)),
+        #     (prec5.values(), len(prec5.values()) / n_users, 'prec5t{}'.format(threshold)),
+        #     (rec10.values(), len(rec10.values()) / n_users, 'rec10t{}'.format(threshold)),
+        #     (rec5.values(), len(rec5.values()) / n_users, 'rec5t{}'.format(threshold)),
+        #     (ndcg10.values(), len(ndcg10.values()) / n_users, 'ndcg10'),
+        #     (ndcg5.values(), len(ndcg5.values()) / n_users, 'ndcg5'),
+        #     (ndcgfull.values(), len(ndcgfull.values()) / n_users, 'ndcgfull'),
+        #     (n_hits.values(), len(n_hits.values()) / n_users, 'hits'),
+        #     (normhits.values(), len(normhits.values()) / n_users, 'normhits'),
+        # )
     else:
-        ret = []
-        for _ in range(9):
-            ret.append(([], float('nan')))
-    ret = tuple(
-        [(np.mean(list(vals)), frac) for (vals, frac) in ret]
-    )
+        ret = (
+            ([], float('nan'), name) for _, name in dicts_and_names
+        )
+        # ret = []
+        # for name in [
+        #     'prec10t{}'.format(threshold), 'prec5t{}'.format(threshold),
+        #     'rec10t{}'.format(threshold), 'rec5t{}'.format(threshold),
+        #     'ndcg10', 'ndcg5', 'ndcgfull', 'hits', 'normhits'
+        # ]:
+        #     ret.append(([], float('nan'), name))
+    
+    ret = {
+        name: (np.mean(list(vals)), frac) for (vals, frac, name) in ret
+    }
     return ret
 

@@ -589,15 +589,25 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
             tic = time.time()
             eval_func = getattr(accuracy, m.lower())
             result = eval_func(predictions, verbose=0)
-            if 'ndcg' in m:
+
+            # NMV 10/26: rewriting this whole chunk b/c we refactored accuracy.py.
+            #if 'ndcg' in m:
+            if m == 'list_metrics':
                 tail_result = eval_func(predictions, verbose=0, head_items=head_items)
-                sub_measures = m.split('_')
-                for i_sm, sub_measure in enumerate(sub_measures):
-                    mean_val, frac_of_users = result[i_sm]
-                    tail_mean_val, _ = tail_result[i_sm]
-                    test_measures[sub_measure] = mean_val
-                    test_measures[sub_measure + '_frac'] = frac_of_users
+                for metric_name in result.keys():
+                    mean_val, frac_of_users = result[metric_name]
+                    tail_mean_val, _= trail_result[metric_name]
+                    test_measures[metric_name] = mean_val
+                    test_measures[metric_name + '_frac'] = frac_of_users
                     test_measures['tail' + sub_measure] = tail_mean_val
+
+                # sub_measures = m.split('_')
+                # for i_sm, sub_measure in enumerate(sub_measures):
+                #     mean_val, frac_of_users = result[i_sm]
+                #     tail_mean_val, _ = tail_result[i_sm]
+                #     test_measures[sub_measure] = mean_val
+                #     test_measures[sub_measure + '_frac'] = frac_of_users
+                #     test_measures['tail' + sub_measure] = tail_mean_val
             else:
                 test_measures[m] = result
         test_time = time.time() - start_specific_testset

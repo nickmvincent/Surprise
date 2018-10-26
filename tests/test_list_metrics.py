@@ -6,7 +6,7 @@ from math import sqrt
 
 import pytest
 
-from surprise.accuracy import mae, prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits_normhits
+from surprise.accuracy import mae, list_metrics
 import numpy as np
 
 
@@ -35,8 +35,15 @@ def test_prec():
     """Tests for the MAE function."""
 
     predictions = [pred(1, 1)]
-    res = prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits_normhits(predictions)
-    prec10, prec5, rec10, rec5, ndgc10, ndcg5, ndcgfull, hits, normhits = res
+    res = list_metrics(predictions)
+    (
+        prec10, prec5, rec10, rec5, ndgc10, 
+        ndcg5, ndcgfull, hits, normhits
+    ) = (
+        res['prec10t4'], res['prec5t4'], res['rec10t4'], res['rec5t4'], 
+        res['ndcg10'], res['ndcg5'], res['ndcgfull'], res['hits'], 
+        res['normhits']
+    )
 
     # there are no hits so prec is nan
     assert np.isnan(prec10[0])
@@ -44,8 +51,15 @@ def test_prec():
     assert hits[0] == 0
 
     predictions = [pred(1, 1), pred(5, 5), pred(5, 5)]
-    res = prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits_normhits(predictions)
-    prec10, prec5, rec10, rec5, ndgc10, ndcg5, ndcgfull, hits, normhits = res
+    res = list_metrics(predictions)
+    (
+        prec10, prec5, rec10, rec5, ndgc10, 
+        ndcg5, ndcgfull, hits, normhits
+    ) = (
+        res['prec10t4'], res['prec5t4'], res['rec10t4'], res['rec5t4'], 
+        res['ndcg10'], res['ndcg5'], res['ndcgfull'], res['hits'], 
+        res['normhits']
+    )
 
     # precison is 1 and recall is 1
     assert prec10[0] == prec5[0] == rec10[0] == rec5[0] == 1
@@ -54,8 +68,15 @@ def test_prec():
 
     # true, est
     predictions = [pred(1, 1), pred(5, 3), pred(5, 5)]
-    res = prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits_normhits(predictions)
-    prec10, prec5, rec10, rec5, ndgc10, ndcg5, ndcgfull, hits, normhits = res
+    res = list_metrics(predictions)
+    (
+        prec10, prec5, rec10, rec5, ndgc10, 
+        ndcg5, ndcgfull, hits, normhits
+    ) = (
+        res['prec10t4'], res['prec5t4'], res['rec10t4'], res['rec5t4'], 
+        res['ndcg10'], res['ndcg5'], res['ndcgfull'], res['hits'], 
+        res['normhits']
+    )
 
     assert prec10[0] == prec5[0] == 1
     assert rec10[0] == rec5[0] == 1
@@ -72,8 +93,15 @@ def test_prec():
         pred(5, 1), pred(4, 1), pred(5, 1),
         
     ]
-    res = prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits_normhits(predictions)
-    prec10, prec5, rec10, rec5, ndgc10, ndcg5, ndcgfull, hits, normhits = res
+    res = list_metrics(predictions)
+    (
+        prec10, prec5, rec10, rec5, ndgc10, 
+        ndcg5, ndcgfull, hits, normhits
+    ) = (
+        res['prec10t4'], res['prec5t4'], res['rec10t4'], res['rec5t4'], 
+        res['ndcg10'], res['ndcg5'], res['ndcgfull'], res['hits'], 
+        res['normhits']
+    )
     print(res)
 
     # there are 6 positives and 3 are correct. But only top 10 are considered!
@@ -99,8 +127,15 @@ def test_prec():
         pred(1,5), pred(1,5), pred(1,5),
         pred(1,5),
     ]
-    res = prec10t4_prec5t4_rec10t4_rec5t4_ndcg10_ndcg5_ndcgfull_hits_normhits(predictions)
-    prec10, prec5, rec10, rec5, ndgc10, ndcg5, ndcgfull, hits, normhits = res
+    res = list_metrics(predictions)
+    (
+        prec10, prec5, rec10, rec5, ndgc10, 
+        ndcg5, ndcgfull, hits, normhits
+    ) = (
+        res['prec10t4'], res['prec5t4'], res['rec10t4'], res['rec5t4'], 
+        res['ndcg10'], res['ndcg5'], res['ndcgfull'], res['hits'], 
+        res['normhits']
+    )
     print(res)
     assert hits[0] == 0
 
