@@ -596,10 +596,10 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
                 tail_result = eval_func(predictions, verbose=0, head_items=head_items)
                 for metric_name in result.keys():
                     mean_val, frac_of_users = result[metric_name]
-                    tail_mean_val, _= trail_result[metric_name]
+                    tail_mean_val, _= tail_result[metric_name]
                     test_measures[metric_name] = mean_val
                     test_measures[metric_name + '_frac'] = frac_of_users
-                    test_measures['tail' + sub_measure] = tail_mean_val
+                    test_measures['tail' + metric_name] = tail_mean_val
 
                 # sub_measures = m.split('_')
                 # for i_sm, sub_measure in enumerate(sub_measures):
