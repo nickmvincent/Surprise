@@ -190,10 +190,12 @@ def list_metrics(predictions, verbose=True, head_items=None):
     prec10, prec5, rec10, rec5 = {}, {}, {}, {}
     ndcg10, ndcg5, ndcgfull = {}, {}, {}
     n_hits, normhits = {}, {}
-    avg_rating, n_false_pos = {}, {}
+    avg_rating, avg_est, n_false_pos = {}, {}, {}
     for uid, user_ratings in user_est_true.items():
         # Sort user ratings by estimated value
+        np.random.shuffle(user_ratings)
         user_ratings_sorted_by_est = sorted(user_ratings, key=lambda x: x[0], reverse=True)
+        
         # also need to sort by true value for Ideal DCG
         user_ratings_sorted_by_true = sorted(user_ratings, key=lambda x: x[1], reverse=True)
 
@@ -232,11 +234,15 @@ def list_metrics(predictions, verbose=True, head_items=None):
                 recdic[uid] = n_rel_k / n_rel
 
         # calculate the full_hits
-        items_with_est_over_t = [(est, true_r) for (est, true_r) in user_ratings_sorted_by_est if est >= threshold]
-        possible_hits = sum((true_r >= threshold) for (_, true_r) in user_ratings_sorted_by_est)
-        n_hits[uid] = sum((true_r >= threshold) for (_, true_r) in items_with_est_over_t)
-        n_false_pos[uid] = sum((true_r < threshold) for (_, true_r) in items_with_est_over_t)
-        avg_rating[uid] = np.mean([est for (est, _) in user_ratings_sorted_by_est])
+        items_with_true_over_t = [(est, true_r) for (est, true_r) in user_ratings_sorted_by_est if true_r >= threshold]
+        #possible_hits = sum((true_r >= threshold) for (_, true_r) in user_ratings_sorted_by_est)
+        possible_hits = len(items_with_true_over_t)
+        top_k = user_ratings_sorted_by_est[:possible_hits]
+
+        n_hits[uid] = sum((true_r >= threshold) for (_, true_r) in top_k)
+        n_false_pos[uid] = sum((true_r < threshold) for (_, true_r) in top_k)
+        avg_rating[uid] = np.mean([true_r for (_, true_r) in user_ratings_sorted_by_est])
+        avg_est[uid] = np.mean([est for (est, _) in user_ratings_sorted_by_est])
         if possible_hits:
             normhits[uid] = n_hits[uid] / possible_hits
 
@@ -255,6 +261,7 @@ def list_metrics(predictions, verbose=True, head_items=None):
         (n_hits, 'hits'),
         (normhits, 'normhits'),
         (avg_rating, 'avg_rating'),
+        (avg_est, 'avg_est'),
         (n_false_pos, 'falsepos'),
     ]
     if n_users:

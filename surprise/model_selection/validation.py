@@ -589,7 +589,6 @@ def eval_task(algo, specific_testsets, measures, head_items, crossfold_index, sa
             tic = time.time()
             eval_func = getattr(accuracy, m.lower())
             result = eval_func(predictions, verbose=0)
-
             # NMV 10/26: rewriting this whole chunk b/c we refactored accuracy.py.
             #if 'ndcg' in m:
             if m == 'list_metrics':
