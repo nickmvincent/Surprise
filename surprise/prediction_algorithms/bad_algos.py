@@ -100,4 +100,7 @@ class TwentyMean(AlgoBase):
         """takes inner ids"""
         if not self.trainset.knows_item(i):
             return self.the_mean
-        return self.movie_to_mean[i]
+        try:
+            return self.movie_to_mean[i]
+        except:
+            return self.the_mean
