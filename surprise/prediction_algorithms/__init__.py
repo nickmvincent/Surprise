@@ -35,6 +35,7 @@ from .co_clustering import CoClustering
 from .bad_algos import GuessThree
 from .bad_algos import GlobalMean
 from .bad_algos import MovieMean
+from .bad_algos import TwentyMean
 
 from .predictions import PredictionImpossible
 from .predictions import Prediction
