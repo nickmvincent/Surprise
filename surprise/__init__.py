@@ -15,6 +15,7 @@ from .prediction_algorithms import CoClustering
 from .prediction_algorithms import GuessThree
 from .prediction_algorithms import GlobalMean
 from .prediction_algorithms import MovieMean
+from .prediction_algorithms import TwentyMean
 
 
 from .prediction_algorithms import PredictionImpossible
