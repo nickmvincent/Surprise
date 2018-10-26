@@ -154,6 +154,16 @@ class SVD(AlgoBase):
         AlgoBase.fit(self, trainset)
         self.sgd(trainset)
 
+        movie_to_sum = defaultdict(int)
+        movie_to_count = defaultdict(int)
+        # (uid, iid, rating)
+        for u, i, r in trainset.all_ratings():
+            movie_to_sum[i] += r
+            movie_to_count[i] += 1
+        self.movie_to_mean = {}
+        for movie_id, val in movie_to_sum.items():
+            self.movie_to_mean[movie_id] = val / movie_to_count[movie_id]
+
         return self
 
     def sgd(self, trainset):
@@ -277,6 +287,8 @@ class SVD(AlgoBase):
             else:
                 raise PredictionImpossible('User and item are unkown.')
 
+        movie_mean = self.movie_to_mean[i]
+        print('movie_mean, est:', movie_mean, est)
         return est
 
 
