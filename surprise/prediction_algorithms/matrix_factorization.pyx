@@ -9,6 +9,7 @@ from __future__ import (absolute_import, division, print_function,
 cimport numpy as np  # noqa
 import numpy as np
 from six.moves import range
+from collections import defaultdict
 
 from .algo_base import AlgoBase
 from .predictions import PredictionImpossible
@@ -287,8 +288,12 @@ class SVD(AlgoBase):
             else:
                 raise PredictionImpossible('User and item are unkown.')
 
-        movie_mean = self.movie_to_mean[i]
-        print('movie_mean, est:', movie_mean, est)
+        if not known_user:
+            try:
+                movie_mean = self.movie_to_mean[i]
+                print('movie_mean, est:', movie_mean, est)
+            except:
+                print('Impossible to get movie mean...')
         return est
 
 
