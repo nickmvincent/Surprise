@@ -157,14 +157,16 @@ class SVD(AlgoBase):
 
         movie_to_sum = defaultdict(int)
         movie_to_count = defaultdict(int)
+        user_to_count = defaultdict(int)
         # (uid, iid, rating)
         for u, i, r in trainset.all_ratings():
             movie_to_sum[i] += r
             movie_to_count[i] += 1
+            user_to_count[u] += 1
         self.movie_to_mean = {}
         for movie_id, val in movie_to_sum.items():
             self.movie_to_mean[movie_id] = val / movie_to_count[movie_id]
-
+        print('$, bu, bi, #users, #movies', np.mean(self.bu), np.mean(self.bi), len(user_to_count), len(movie_to_count))
         return self
 
     def sgd(self, trainset):
@@ -272,7 +274,7 @@ class SVD(AlgoBase):
 
         if self.biased:
             est = self.trainset.global_mean
-
+            
             if known_user:
                 est += self.bu[u]
 
@@ -291,9 +293,9 @@ class SVD(AlgoBase):
         if not known_user:
             try:
                 movie_mean = self.movie_to_mean[i]
-                print('movie_mean, est:', movie_mean, est)
+                #print('movie_mean, est,', movie_mean, ',', est)
             except:
-                print('Impossible to get movie mean...')
+                pass#print('Impossible to get movie mean...')
         return est
 
 

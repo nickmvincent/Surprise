@@ -193,6 +193,7 @@ def list_metrics(predictions, verbose=True, head_items=None):
     avg_rating, avg_est, n_false_pos = {}, {}, {}
     for uid, user_ratings in user_est_true.items():
         # Sort user ratings by estimated value
+        np.random.seed(0)
         np.random.shuffle(user_ratings)
         user_ratings_sorted_by_est = sorted(user_ratings, key=lambda x: x[0], reverse=True)
         

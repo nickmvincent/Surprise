@@ -452,14 +452,14 @@ def cross_validate_custom(
                 'boycott': boycott_testset, 'like-boycott': like_boycott_but_testset,
                 'all-like-boycott': all_like_boycott_testset
             }
-            print('About to run fit and score for crossfold index {}'.format(crossfold_index))
-            print('psutil.virtual_memory().used {} (GB)'.format(psutil.virtual_memory().used / (1024**3)))
+            #print('About to run fit and score for crossfold index {}'.format(crossfold_index))
+            #print('psutil.virtual_memory().used {} (GB)'.format(psutil.virtual_memory().used / (1024**3)))
 
             tic = time.time()
             results = fit_and_score(
                 algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items, save_path
             )
-            print('fit_and_score for crossfold {} took {} seconds'.format(crossfold_index, time.time() - tic))
+            #print('fit_and_score for crossfold {} took {} seconds'.format(crossfold_index, time.time() - tic))
             out += [results]
 
             # if uid_plus_iid_to_row:
