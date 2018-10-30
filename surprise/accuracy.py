@@ -191,6 +191,7 @@ def list_metrics(predictions, verbose=True, head_items=None):
     ndcg10, ndcg5, ndcgfull = {}, {}, {}
     n_hits, normhits = {}, {}
     avg_rating, avg_est, n_false_pos = {}, {}, {}
+    total_hits = {}
     for uid, user_ratings in user_est_true.items():
         # Sort user ratings by estimated value
         np.random.seed(0)
@@ -244,6 +245,7 @@ def list_metrics(predictions, verbose=True, head_items=None):
         n_false_pos[uid] = sum((true_r < threshold) for (_, true_r) in top_k)
         avg_rating[uid] = np.mean([true_r for (_, true_r) in user_ratings_sorted_by_est])
         avg_est[uid] = np.mean([est for (est, _) in user_ratings_sorted_by_est])
+        total_hits[uid] = n_hits[uid]
         if possible_hits:
             normhits[uid] = n_hits[uid] / possible_hits
 
@@ -261,9 +263,10 @@ def list_metrics(predictions, verbose=True, head_items=None):
         (ndcgfull, 'ndcgfull'),
         (n_hits, 'hits'),
         (normhits, 'normhits'),
-        (avg_rating, 'avg_rating'),
-        (avg_est, 'avg_est'),
+        (avg_rating, 'avgrating'),
+        (avg_est, 'avgest'),
         (n_false_pos, 'falsepos'),
+        (total_hits, 'totalhits')
     ]
     if n_users:
         ret = (
@@ -285,16 +288,15 @@ def list_metrics(predictions, verbose=True, head_items=None):
         ret = (
             ([], float('nan'), name) for _, name in dicts_and_names
         )
-        # ret = []
-        # for name in [
-        #     'prec10t{}'.format(threshold), 'prec5t{}'.format(threshold),
-        #     'rec10t{}'.format(threshold), 'rec5t{}'.format(threshold),
-        #     'ndcg10', 'ndcg5', 'ndcgfull', 'hits', 'normhits'
-        # ]:
-        #     ret.append(([], float('nan'), name))
-    
-    ret = {
-        name: (np.mean(list(vals)), frac) for (vals, frac, name) in ret
-    }
-    return ret
+
+    prepped = {}
+    for (vals, frac, name) in ret:
+        if 'total' not in name:
+            prepped[name] =  (np.mean(list(vals)), frac)
+        else:
+            prepped[name] = (np.sum(list(vals)), frac)
+    # ret = {
+    #     name: (np.mean(list(vals)), frac) for (vals, frac, name) in ret
+    # }
+    return prepped
 
