@@ -294,7 +294,9 @@ def cross_validate_many(
 def cross_validate_custom(
         algo, nonboycott, boycott, boycott_uid_set, like_boycott_uid_set, measures=None, cv=5,
         return_train_measures=False, n_jobs=-1,
-        pre_dispatch='2*n_jobs', verbose=False, head_items=None, save_path=None, load_path=None, data=None):
+        pre_dispatch='2*n_jobs', verbose=False, head_items=None, save_path=None, load_path=None, load_boycotts_path=None, 
+        data=None
+        ):
     '''
     Run a cross validation procedure for a given algorithm, reporting accuracy
     measures and computation times.
@@ -400,7 +402,7 @@ def cross_validate_custom(
             ]]
         delayed_gen = (
             delayed(fit_and_score)(
-                algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items, save_path
+                algo, trainset, testsets, measures, return_train_measures, crossfold_index, head_items, save_path, load_boycotts_path
             ) for algo, trainset, testsets, measures, return_train_measures, crossfold_index in args_list
         )
         out = Parallel(n_jobs=n_jobs, pre_dispatch=pre_dispatch)(delayed_gen)
